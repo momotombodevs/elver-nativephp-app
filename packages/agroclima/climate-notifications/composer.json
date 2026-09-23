@@ -1,0 +1,26 @@
+{
+    "name": "agroclima/climate-notifications",
+    "version": "1.0.0",
+    "description": "Local notifications and background climate alert checks for Elver",
+    "type": "nativephp-plugin",
+    "license": "MIT",
+    "require": {
+        "php": "^8.2",
+        "nativephp/mobile": "^4.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Agroclima\\ClimateNotifications\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Agroclima\\ClimateNotifications\\ClimateNotificationsServiceProvider"
+            ]
+        },
+        "nativephp": {
+            "manifest": "nativephp.json"
+        }
+    }
+}

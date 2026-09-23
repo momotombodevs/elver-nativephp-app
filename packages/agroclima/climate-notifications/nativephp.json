@@ -1,0 +1,76 @@
+{
+    "name": "agroclima/climate-notifications",
+    "version": "1.0.0",
+    "description": "Native local notifications and background climate alert checks",
+    "namespace": "AgroclimaClimateNotifications",
+    "keywords": [
+        "notifications",
+        "background-tasks",
+        "climate-alerts"
+    ],
+    "category": "utilities",
+    "license": "MIT",
+    "platforms": [
+        "android",
+        "ios"
+    ],
+    "bridge_functions": [
+        {
+            "name": "ClimateNotifications.CheckPermission",
+            "android": "com.agroclima.plugins.climatenotifications.ClimateNotificationFunctions.CheckPermission",
+            "ios": "ClimateNotificationFunctions.CheckPermission",
+            "description": "Check local notification permission"
+        },
+        {
+            "name": "ClimateNotifications.RequestPermission",
+            "android": "com.agroclima.plugins.climatenotifications.ClimateNotificationFunctions.RequestPermission",
+            "ios": "ClimateNotificationFunctions.RequestPermission",
+            "description": "Request local notification permission"
+        },
+        {
+            "name": "ClimateNotifications.SyncSchedule",
+            "android": "com.agroclima.plugins.climatenotifications.ClimateNotificationFunctions.SyncSchedule",
+            "ios": "ClimateNotificationFunctions.SyncSchedule",
+            "android_params": ["context"],
+            "description": "Update the background climate alert schedule"
+        }
+    ],
+    "android": {
+        "min_version": 29,
+        "permissions": [
+            "android.permission.INTERNET",
+            "android.permission.POST_NOTIFICATIONS"
+        ],
+        "dependencies": {
+            "implementation": [
+                "androidx.work:work-runtime-ktx:2.11.2"
+            ]
+        },
+        "activities": [],
+        "services": [],
+        "receivers": [],
+        "providers": []
+    },
+    "ios": {
+        "min_version": "18.2",
+        "background_modes": ["fetch"],
+        "info_plist": {
+            "BGTaskSchedulerPermittedIdentifiers": [
+                "dev.donmanuel.elver.climate-alert-refresh"
+            ]
+        },
+        "dependencies": {
+            "swift_packages": [],
+            "pods": []
+        },
+        "init_function": "ClimateNotificationFunctions.initialize"
+    },
+    "assets": {
+        "android": [],
+        "ios": []
+    },
+    "events": [
+        "App\\Events\\ClimateNotificationPermissionResult"
+    ],
+    "service_provider": "Agroclima\\ClimateNotifications\\ClimateNotificationsServiceProvider"
+}
