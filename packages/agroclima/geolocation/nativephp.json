@@ -1,0 +1,74 @@
+{
+    "name": "agroclima/geolocation",
+    "version": "1.0.0",
+    "description": "Foreground one-shot geolocation and permission handling for Elver",
+    "namespace": "AgroClimaGeolocation",
+    "keywords": [
+        "geolocation",
+        "location",
+        "gps"
+    ],
+    "category": "utilities",
+    "license": "MIT",
+    "platforms": [
+        "android",
+        "ios"
+    ],
+    "bridge_functions": [
+        {
+            "name": "Geolocation.GetCurrentPosition",
+            "android": "com.agroclima.plugins.geolocation.AgroClimaGeolocationFunctions.GetCurrentPosition",
+            "ios": "AgroClimaGeolocationFunctions.GetCurrentPosition",
+            "description": "Request one foreground location fix"
+        },
+        {
+            "name": "Geolocation.CheckPermissions",
+            "android": "com.agroclima.plugins.geolocation.AgroClimaGeolocationFunctions.CheckPermissions",
+            "ios": "AgroClimaGeolocationFunctions.CheckPermissions",
+            "description": "Read foreground location permission state"
+        },
+        {
+            "name": "Geolocation.RequestPermissions",
+            "android": "com.agroclima.plugins.geolocation.AgroClimaGeolocationFunctions.RequestPermissions",
+            "ios": "AgroClimaGeolocationFunctions.RequestPermissions",
+            "description": "Request foreground location permission"
+        }
+    ],
+    "android": {
+        "min_version": 26,
+        "permissions": [
+            "android.permission.ACCESS_COARSE_LOCATION",
+            "android.permission.ACCESS_FINE_LOCATION"
+        ],
+        "repositories": [],
+        "dependencies": {
+            "implementation": []
+        },
+        "activities": [],
+        "services": [],
+        "receivers": [],
+        "providers": []
+    },
+    "ios": {
+        "min_version": "18.2",
+        "info_plist": {
+            "NSLocationWhenInUseUsageDescription": "Elver usa tu ubicación al guardar un lugar y mostrar su clima."
+        },
+        "repositories": [],
+        "dependencies": {
+            "swift_packages": [],
+            "pods": []
+        }
+    },
+    "assets": {
+        "android": [],
+        "ios": []
+    },
+    "secrets": [],
+    "events": [
+        "Native\\Mobile\\Events\\Geolocation\\LocationReceived",
+        "Native\\Mobile\\Events\\Geolocation\\PermissionStatusReceived",
+        "Native\\Mobile\\Events\\Geolocation\\PermissionRequestResult"
+    ],
+    "service_provider": "Agroclima\\Geolocation\\AgroClimaGeolocationServiceProvider"
+}
