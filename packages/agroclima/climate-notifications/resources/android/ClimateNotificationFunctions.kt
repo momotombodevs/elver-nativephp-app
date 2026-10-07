@@ -52,10 +52,8 @@ object ClimateNotificationFunctions {
         override fun execute(parameters: Map<String, Any>): Map<String, Any> {
             activity.runOnUiThread {
                 NotificationPermissionCoordinator.install(activity).request(
-                    PermissionRequest(
-                        event = parameters["event"] as? String ?: PERMISSION_EVENT,
-                        id = parameters["id"] as? String,
-                    ),
+                    event = parameters["event"] as? String ?: PERMISSION_EVENT,
+                    id = parameters["id"] as? String,
                 )
             }
 
@@ -74,7 +72,7 @@ object ClimateNotificationFunctions {
 
 private data class PermissionRequest(val event: String, val id: String?)
 
-private class NotificationPermissionCoordinator : Fragment() {
+class NotificationPermissionCoordinator : Fragment() {
     private val pendingRequests = mutableListOf<PermissionRequest>()
     private var permissionRequestInFlight = false
 
@@ -116,7 +114,8 @@ private class NotificationPermissionCoordinator : Fragment() {
         dispatch(event, id, notificationsAllowed(requireContext()))
     }
 
-    fun request(request: PermissionRequest) {
+    fun request(event: String, id: String?) {
+        val request = PermissionRequest(event, id)
         val context = requireContext()
 
         if (notificationsAllowed(context) || Build.VERSION.SDK_INT < 33) {
@@ -456,6 +455,7 @@ class ClimateAlertWorker(
 
         val locationIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
             ?.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            ?.putExtra("notification_url", notificationRoute(alert))
         val contentIntent = locationIntent?.let {
             PendingIntent.getActivity(
                 context,
@@ -471,8 +471,13 @@ class ClimateAlertWorker(
             alert.optDouble("threshold"),
         )
         val message = "${alert.optString("label")} $operator $threshold ${alert.optString("unit")} en $locationName."
+        val notificationIcon = context.resources.getIdentifier(
+            "ic_climate_alert",
+            "drawable",
+            context.packageName,
+        )
         val notification = NotificationCompat.Builder(context, "climate_alerts")
-            .setSmallIcon(android.R.drawable.ic_dialog_info)
+            .setSmallIcon(notificationIcon.takeIf { it != 0 } ?: android.R.drawable.ic_dialog_info)
             .setContentTitle("Alerta climática")
             .setContentText(message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
@@ -493,6 +498,9 @@ class ClimateAlertWorker(
 
         return candidate.takeIf { uri.scheme == "https" && !uri.host.isNullOrBlank() }
     }
+
+    private fun notificationRoute(alert: JSONObject): String =
+        "/alerts/location/${alert.optString("locationId")}/alert/${alert.optString("id")}"
 
     companion object {
         private val METRICS = listOf(

@@ -47,7 +47,36 @@ enum ClimateNotificationFunctions {
     }
 
     static func initialize() {
+        UNUserNotificationCenter.current().delegate = ClimateNotificationDelegate.shared
         ClimateAlertBackground.initialize()
+    }
+}
+
+private final class ClimateNotificationDelegate: NSObject, UNUserNotificationCenterDelegate {
+    static let shared = ClimateNotificationDelegate()
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        willPresent notification: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([.banner, .sound])
+    }
+
+    func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse,
+        withCompletionHandler completionHandler: @escaping () -> Void
+    ) {
+        if let route = response.notification.request.content.userInfo["notification_url"] as? String {
+            let payload: [String: String] = ["uri": route]
+            if let data = try? JSONSerialization.data(withJSONObject: payload),
+               let json = String(data: data, encoding: .utf8) {
+                NativeElementBridge.sendNativeEvent(eventName: "__deeplink", payloadJson: json)
+            }
+        }
+
+        completionHandler()
     }
 }
 
@@ -299,6 +328,13 @@ private enum ClimateAlertBackground {
             name
         )
         content.sound = .default
+
+        if let locationId = location["id"] as? String,
+           let alertId = alert["id"] as? String {
+            content.userInfo = [
+                "notification_url": "/alerts/location/\(locationId)/alert/\(alertId)",
+            ]
+        }
 
         let request = UNNotificationRequest(
             identifier: "climate-alert-\(alert["id"] as? String ?? UUID().uuidString)",

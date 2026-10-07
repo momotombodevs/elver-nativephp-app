@@ -2,6 +2,9 @@
 
 use App\Domain\AgroClima\Contracts\WeatherProvider;
 use App\Domain\AgroClima\Enums\AlertState;
+use App\Domain\AgroClima\Enums\ThresholdOperator;
+use App\Domain\AgroClima\Enums\WeatherMetric;
+use App\Events\ClimateNotificationPermissionResult;
 use App\Jobs\RefreshLocationForecast;
 use App\Models\ClimateAlert;
 use App\Models\Location;
@@ -22,24 +25,125 @@ it('keeps alerts primary and creates one from a native bottom sheet', function (
     $screen = Native::visit('/alerts')
         ->assertSee('Tus alertas')
         ->assertSee('Sin alertas')
+        ->assertDontSee('Avisos aunque cierres la app')
+        ->assertDontSee('Activa notificaciones para recibir avisos.')
+        ->assertSee('Revisando permisos…')
+        ->assertNativeCalled('ClimateNotifications.CheckPermission')
+        ->assertNativeNotCalled('ClimateNotifications.SyncSchedule')
         ->assertDontSee('Evaluar ahora')
         ->assertDontSee(substr($location->id, 0, 8))
         ->assertSet('showCreateSheet', false)
         ->tap('create-alert-action')
         ->assertSet('showCreateSheet', true)
         ->assertElement('bottom_sheet', fn (array $node): bool => ($node['ref'] ?? null) === 'create-alert-sheet')
-        ->assertSee('Umbral (°C)')
-        ->set('metricChoice', 'Precipitación')
-        ->assertSee('Umbral (mm)')
+        ->assertSee('Qué medir')
+        ->assertSee('Avisar si')
+        ->assertSee('Valor (°C)')
+        ->tap('quick-alert-rain')
+        ->assertSet('metricChoice', 'Lluvia')
+        ->assertSet('threshold', '')
+        ->assertSee('Valor (mm)')
         ->set('threshold', '12,5')
         ->tap('create-alert')
         ->assertSet('showCreateSheet', false)
         ->assertNativeCalled('Dialog.Toast', fn (array $params): bool => $params === [
             'message' => 'Alerta guardada.',
             'duration' => 'short',
-        ]);
+        ])
+        ->assertNativeCalled('ClimateNotifications.RequestPermission')
+        ->assertSee('Revisando permisos…')
+        ->assertSee('Lluvia')
+        ->assertSee('Tus alertas');
 
-    expect(ClimateAlert::query()->sole()->threshold)->toBe('12.50');
+    $alert = ClimateAlert::query()->sole();
+    expect($alert->threshold)->toBe('12.50')
+        ->and($alert->metric)->toBe(WeatherMetric::Precipitation)
+        ->and($alert->operator)->toBe(ThresholdOperator::Above);
+});
+
+it('refreshes notification access when the alerts screen opens and resumes', function () {
+    Location::factory()->default()->create(['name' => 'Mi ubicación']);
+
+    Native::fakeBridge();
+
+    $screen = Native::visit('/alerts')
+        ->assertNativeCalled('ClimateNotifications.CheckPermission')
+        ->assertSee('Revisando permisos…');
+    $firstRequestId = $screen->get('pendingNotificationAccessId');
+
+    $screen->emitNative(ClimateNotificationPermissionResult::class, [
+        'granted' => true,
+        'id' => $firstRequestId,
+    ])->assertSee('Avisos activados')
+        ->assertDontSee('Activar');
+
+    $screen->call('onResume')
+        ->assertNativeCalled('ClimateNotifications.CheckPermission', fn (array $parameters): bool => $parameters['id'] !== $firstRequestId
+        );
+});
+
+it('shows only the enabled status after notification access is granted', function () {
+    Location::factory()->default()->create(['name' => 'Mi ubicación']);
+
+    Native::fakeBridge();
+
+    $screen = Native::visit('/alerts');
+    $requestId = $screen->get('pendingNotificationAccessId');
+
+    $screen->emitNative(ClimateNotificationPermissionResult::class, [
+        'granted' => true,
+        'id' => $requestId,
+    ])->assertSee('Avisos activados')
+        ->assertDontSee('Activa los avisos')
+        ->assertDontSee('Activar')
+        ->assertDontSee('Ajustes');
+});
+
+it('offers activation instructions when notification access is not granted', function () {
+    Location::factory()->default()->create(['name' => 'Mi ubicación']);
+
+    Native::fakeBridge();
+
+    $screen = Native::visit('/alerts');
+    $requestId = $screen->get('pendingNotificationAccessId');
+
+    $screen->emitNative(ClimateNotificationPermissionResult::class, [
+        'granted' => false,
+        'id' => $requestId,
+    ])->assertSee('Activa los avisos')
+        ->assertSee('Activa los avisos en Ajustes.')
+        ->assertSee('Activar')
+        ->assertSee('Ajustes')
+        ->assertDontSee('Avisos aunque cierres la app');
+});
+
+it('fills alert type and comparison for quick choices without choosing a threshold', function () {
+    Location::factory()->default()->create();
+
+    Native::fakeBridge();
+
+    Native::visit('/alerts')
+        ->tap('create-alert-action')
+        ->set('threshold', '12')
+        ->tap('quick-alert-rain')
+        ->assertSet('metricChoice', 'Lluvia')
+        ->assertSet('operatorChoice', 'Más de')
+        ->assertSet('threshold', '')
+        ->set('threshold', '30')
+        ->tap('quick-alert-heat')
+        ->assertSet('metricChoice', 'Temperatura')
+        ->assertSet('operatorChoice', 'Más de')
+        ->assertSet('threshold', '')
+        ->set('threshold', '10')
+        ->tap('quick-alert-cold')
+        ->assertSet('metricChoice', 'Temperatura')
+        ->assertSet('operatorChoice', 'Menos de')
+        ->assertSet('threshold', '')
+        ->set('threshold', '8')
+        ->tap('quick-alert-wind')
+        ->assertSet('metricChoice', 'Viento')
+        ->assertSet('operatorChoice', 'Más de')
+        ->assertSet('threshold', '');
 });
 
 it('uses a native control for pause and confirms destructive deletion', function () {
@@ -53,7 +157,7 @@ it('uses a native control for pause and confirms destructive deletion', function
 
     $screen = Native::visit('/alerts')
         ->assertSee('Activa')
-        ->assertSee('Umbral superado')
+        ->assertSee('Superó el valor')
         ->tap('toggle-alert-'.$alert->id)
         ->assertSee('Pausada')
         ->tap('toggle-alert-'.$alert->id)
@@ -112,8 +216,8 @@ it('evaluates stale alert data from cache while refreshing in the queue', functi
     Native::fakeBridge();
 
     Native::visit('/alerts')
-        ->assertSee('Datos desactualizados')
-        ->assertSee('Revisando las condiciones para tus alertas…')
+        ->assertSee('Datos antiguos')
+        ->assertSee('Actualizando clima…')
         ->assertSet('forecastRefreshLoading', true)
         ->assertAccessible();
 
@@ -135,7 +239,7 @@ it('queues the first weather review when creating an alert without cached data',
         ->tap('create-alert-action')
         ->set('threshold', '30')
         ->tap('create-alert')
-        ->assertSee('Revisando las condiciones para tus alertas…')
+        ->assertSee('Actualizando clima…')
         ->assertSet('forecastRefreshLoading', true);
 
     Queue::assertPushed(RefreshLocationForecast::class, fn (RefreshLocationForecast $job): bool => $job->locationId === $location->id && $job->force === false
