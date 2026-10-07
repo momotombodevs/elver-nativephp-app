@@ -1,4 +1,13 @@
-<native:top-bar title="Gráficas" />
+<native:top-bar title="Gráficas">
+    @if ($this->locationOptions !== [])
+        <native:top-bar-action
+            id="refresh-series"
+            label="Actualizar"
+            icon="refresh"
+            @tap="refreshSeries"
+        />
+    @endif
+</native:top-bar>
 
 <native:scroll-view ref="chart-explorer-screen" class="w-full h-full bg-theme-background">
     <native:column class="w-full p-4 gap-4">
@@ -12,7 +21,7 @@
         @else
             <native:select ref="explorer-location" label="Ubicación" :options="$this->locationOptions" native:model="locationChoice" a11y-label="Ubicación de la serie climática" />
             <native:row class="w-full gap-3">
-                <native:select ref="explorer-metric" class="flex-1" label="Variable" :options="$this->metricOptions" native:model="metricChoice" a11y-label="Variable climática" />
+                <native:select ref="explorer-metric" class="flex-1" label="Qué ver" :options="$this->metricOptions" native:model="metricChoice" a11y-label="Dato del clima" />
                 <native:select ref="explorer-range" class="flex-1" label="Periodo" :options="['24 horas', '7 días']" native:model="rangeChoice" a11y-label="Periodo de la gráfica" />
             </native:row>
 
@@ -33,7 +42,6 @@
                         <native:text class="text-xl font-bold text-theme-on-surface">{{ $metricChoice }}</native:text>
                         <native:text class="text-sm text-theme-on-surface-variant">{{ $rangeChoice }}</native:text>
                     </native:column>
-                    <native:button ref="refresh-series" variant="secondary" :disabled="$loading" :loading="$loading" @tap="refreshSeries" a11y-label="Actualizar gráfica">{{ $loading ? 'Actualizando…' : 'Actualizar' }}</native:button>
                 </native:row>
 
                 @if ($loading)
@@ -100,9 +108,8 @@
                 <native:column ref="explorer-loading-state" native:poll="2s" class="w-full rounded-lg bg-theme-surface p-5 gap-3">
                     <native:row class="w-full items-center gap-3">
                         <native:activity-indicator />
-                        <native:text class="text-base font-semibold text-theme-on-surface">Cargando pronóstico</native:text>
+                        <native:text class="text-base font-semibold text-theme-on-surface">Cargando gráfica…</native:text>
                     </native:row>
-                    <native:text class="text-sm text-theme-on-surface-variant">Preparando la gráfica para {{ $this->locationChoice }}.</native:text>
                 </native:column>
             @elseif ($error === null)
                 <native:column ref="explorer-no-data" class="w-full rounded-lg bg-theme-surface p-5 gap-3">

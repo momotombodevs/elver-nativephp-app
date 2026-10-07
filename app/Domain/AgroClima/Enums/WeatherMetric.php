@@ -14,7 +14,7 @@ enum WeatherMetric: string
         return match ($this) {
             self::Temperature => 'Temperatura',
             self::Humidity => 'Humedad relativa',
-            self::Precipitation => 'Precipitación',
+            self::Precipitation => 'Lluvia',
             self::WindSpeed => 'Velocidad del viento',
         };
     }
@@ -32,10 +32,10 @@ enum WeatherMetric: string
     public function color(): string
     {
         return match ($this) {
-            self::Temperature => '#D97706',
-            self::Humidity => '#2563EB',
-            self::Precipitation => '#0891B2',
-            self::WindSpeed => '#16A34A',
+            self::Temperature => '#7F00FF',
+            self::Humidity => '#B86BFF',
+            self::Precipitation => theme('accent'),
+            self::WindSpeed => '#4B008F',
         };
     }
 }

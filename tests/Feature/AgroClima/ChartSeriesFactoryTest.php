@@ -10,12 +10,12 @@ use Carbon\CarbonImmutable;
 function chartSeriesWeatherData(): WeatherData
 {
     $at = CarbonImmutable::parse('2027-01-15T12:30:00Z');
-    $point = fn (int $offset, float $temperature): WeatherPoint => new WeatherPoint(
+    $point = fn (int $offset, float $temperature, float $precipitation = 0.0): WeatherPoint => new WeatherPoint(
         $at->startOfHour()->addHours($offset),
         [
             'temperature_2m' => $temperature,
             'relative_humidity_2m' => 70.0,
-            'precipitation' => 0.0,
+            'precipitation' => $precipitation,
             'wind_speed_10m' => 8.0,
         ],
     );
@@ -23,7 +23,7 @@ function chartSeriesWeatherData(): WeatherData
     return new WeatherData(
         timezone: 'America/Managua',
         current: $point(0, 28),
-        hourly: [$point(-1, 27), $point(0, 28), $point(1, 29), $point(24, 30)],
+        hourly: [$point(-1, 27), $point(0, 28, 0.5), $point(1, 29, 1.25), $point(24, 30, 3.0)],
     );
 }
 
@@ -48,3 +48,58 @@ it('rejects chart ranges longer than the seven day forecast', function () {
 
     (new ChartSeriesFactory)->forMetric($location, chartSeriesWeatherData(), WeatherMetric::Temperature, 169);
 })->throws(InvalidArgumentException::class, 'between 1 and 168 hours');
+
+it('aggregates weekly values by local calendar day', function () {
+    $location = new Location;
+    $location->id = '019d0000-0000-7000-8000-000000000001';
+    $factory = new ChartSeriesFactory;
+    $data = chartSeriesWeatherData();
+
+    $temperatures = $factory->forMetricByDay($location, $data, WeatherMetric::Temperature)[0]['points'];
+    $rainfall = $factory->forMetricByDay($location, $data, WeatherMetric::Precipitation)[0]['points'];
+
+    expect($temperatures)->toHaveCount(2)
+        ->and($temperatures[0]['x'])->toBe('2027-01-15')
+        ->and($temperatures[0]['value'])->toBe(28.5)
+        ->and($temperatures[1]['x'])->toBe('2027-01-16')
+        ->and($temperatures[1]['value'])->toBe(30.0)
+        ->and($rainfall[0]['value'])->toBe(1.75)
+        ->and($rainfall[1]['value'])->toBe(3.0);
+});
+
+it('rejects weekly chart ranges longer than seven days', function () {
+    $location = new Location;
+    $location->id = '019d0000-0000-7000-8000-000000000001';
+
+    (new ChartSeriesFactory)->forMetricByDay($location, chartSeriesWeatherData(), WeatherMetric::Temperature, 8);
+})->throws(InvalidArgumentException::class, 'between 1 and 7 days');
+
+it('uses the semantic accent color for rain charts', function () {
+    expect(WeatherMetric::Temperature->color())->toBe('#7F00FF')
+        ->and(WeatherMetric::Humidity->color())->toBe('#B86BFF')
+        ->and(WeatherMetric::Precipitation->color())->toBe(theme('accent'))
+        ->and(WeatherMetric::Precipitation->label())->toBe('Lluvia')
+        ->and(WeatherMetric::WindSpeed->color())->toBe('#4B008F')
+        ->and([
+            WeatherMetric::Temperature->color(),
+            WeatherMetric::Humidity->color(),
+            WeatherMetric::Precipitation->color(),
+            WeatherMetric::WindSpeed->color(),
+        ])->toHaveCount(4);
+});
+
+it('exposes the branded native ui tokens in both appearances', function () {
+    $theme = config('native-ui.theme');
+
+    expect($theme['light'])->toMatchArray([
+        'primary' => '#7F00FF',
+        'accent' => '#006A70',
+        'on-accent' => '#FFFFFF',
+        'background' => '#F8F5FF',
+    ])->and($theme['dark'])->toMatchArray([
+        'primary' => '#7F00FF',
+        'accent' => '#75DBD4',
+        'on-accent' => '#0B3433',
+        'background' => '#0F0719',
+    ]);
+});

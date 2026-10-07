@@ -6,6 +6,7 @@ use App\Domain\AgroClima\Data\WeatherData;
 use App\Domain\AgroClima\Data\WeatherPoint;
 use App\Domain\AgroClima\Enums\WeatherMetric;
 use App\Models\Location;
+use Carbon\CarbonImmutable;
 use InvalidArgumentException;
 
 final class ChartSeriesFactory
@@ -40,6 +41,54 @@ final class ChartSeriesFactory
                     && $point->at->lessThan($endsAt),
             ),
         ));
+
+        return [[
+            'id' => $seriesId,
+            'name' => $metric->label(),
+            'color' => $metric->color(),
+            'points' => $points,
+        ]];
+    }
+
+    /**
+     * @return list<array{id: string, name: string, color: string, points: list<array{id: string, label: string, value: float, x: string}>}>
+     */
+    public function forMetricByDay(Location $location, WeatherData $data, WeatherMetric $metric, int $days = 7): array
+    {
+        if ($days < 1 || $days > 7) {
+            throw new InvalidArgumentException('Chart range must be between 1 and 7 days.');
+        }
+
+        $startsAt = $data->current->at->startOfHour();
+        $endsAt = $startsAt->addHours($days * 24);
+        $seriesId = "location:{$location->getKey()}:metric:{$metric->value}";
+        $dailyValues = [];
+
+        foreach ($data->hourlyPoints($metric) as $point) {
+            if ($point->at->lessThan($startsAt) || $point->at->greaterThanOrEqualTo($endsAt)) {
+                continue;
+            }
+
+            $date = $point->at->setTimezone($data->timezone)->toDateString();
+            $dailyValues[$date][] = $point->value($metric);
+        }
+
+        ksort($dailyValues);
+
+        $points = [];
+        foreach ($dailyValues as $date => $values) {
+            $total = array_sum($values);
+            $value = $metric === WeatherMetric::Precipitation
+                ? $total
+                : $total / count($values);
+
+            $points[] = [
+                'id' => "{$seriesId}:date:{$date}",
+                'label' => CarbonImmutable::parse($date)->format('d/m'),
+                'value' => $value,
+                'x' => $date,
+            ];
+        }
 
         return [[
             'id' => $seriesId,
