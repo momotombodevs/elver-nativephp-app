@@ -12,8 +12,7 @@
 <p align="center">
   <a href="#core-capabilities">Capabilities</a> ·
   <a href="#architecture">Architecture</a> ·
-  <a href="#technology">Technology</a> ·
-  <a href="#testing">Testing</a>
+  <a href="#technology">Technology</a>
 </p>
 
 ## Overview

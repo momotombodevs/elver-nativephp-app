@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="es">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta name="theme-color" content="#4B0099" />
+        <meta name="apple-mobile-web-app-title" content="Elver" />
+        <meta name="robots" content="index, follow, max-image-preview:large" />
+        <meta
+            name="description"
+            content="Elver conserva el clima de tu zona, incluso cuando la conexión falla."
+        />
+        <meta property="og:type" content="website" />
+        <meta property="og:locale" content="es_NI" />
+        <meta property="og:site_name" content="Elver" />
+        <meta property="og:title" content="Elver — El clima que te importa" />
+        <meta
+            property="og:description"
+            content="Pronósticos, gráficas y alertas locales, incluso cuando no hay señal."
+        />
+        <meta
+            property="og:url"
+            content="https://momotombodevs.github.io/elver-nativephp-app/"
+        />
+        <meta
+            property="og:image"
+            content="https://momotombodevs.github.io/elver-nativephp-app/og-image.png"
+        />
+        <meta property="og:image:width" content="1200" />
+        <meta property="og:image:height" content="630" />
+        <meta
+            property="og:image:alt"
+            content="Elver, clima local para iOS y Android"
+        />
+        <meta name="twitter:card" content="summary_large_image" />
+        <meta name="twitter:title" content="Elver — El clima que te importa" />
+        <meta
+            name="twitter:description"
+            content="Pronósticos, gráficas y alertas locales, incluso cuando no hay señal."
+        />
+        <meta
+            name="twitter:image"
+            content="https://momotombodevs.github.io/elver-nativephp-app/og-image.png"
+        />
+        <meta
+            name="twitter:url"
+            content="https://momotombodevs.github.io/elver-nativephp-app/"
+        />
+        <meta name="author" content="Momotombo Devs" />
+        <title>Elver — El clima que te importa</title>
+        <link
+            rel="canonical"
+            href="https://momotombodevs.github.io/elver-nativephp-app/"
+        />
+        <link rel="sitemap" type="application/xml" href="./sitemap.xml" />
+        <link
+            rel="icon"
+            type="image/png"
+            href="./favicon-96x96.png"
+            sizes="96x96"
+        />
+        <link rel="shortcut icon" href="./favicon.ico" />
+        <link
+            rel="apple-touch-icon"
+            sizes="180x180"
+            href="./apple-touch-icon.png"
+        />
+        <link rel="manifest" href="./site.webmanifest" />
+        <link rel="stylesheet" href="./styles.css" />
+        <script type="application/ld+json">
+            {
+                "@context": "https://schema.org",
+                "@type": "SoftwareApplication",
+                "name": "Elver",
+                "description": "Aplicación de clima local para consultar pronósticos, gráficas y alertas recientes incluso sin conexión.",
+                "applicationCategory": "WeatherApplication",
+                "operatingSystem": "iOS, Android",
+                "url": "https://momotombodevs.github.io/elver-nativephp-app/",
+                "image": "https://momotombodevs.github.io/elver-nativephp-app/og-image.png",
+                "author": {
+                    "@type": "Organization",
+                    "name": "Momotombo Devs",
+                    "url": "https://momotombo.dev/"
+                }
+            }
+        </script>
+        <script src="./script.js" defer></script>
+    </head>
+    <body>
+        <a class="skip-link" href="#main">Saltar al contenido</a>
+        <div class="page-shell">
+            <header class="site-header" aria-label="Navegación principal">
+                <a class="brand" href="./" aria-label="Elver, inicio">
+                    <img
+                        class="brand-logo"
+                        src="./assets/brand/elver-app-icon.png"
+                        width="44"
+                        height="44"
+                        alt=""
+                    />
+                    <span class="brand-name">Elver</span>
+                </a>
+                <button
+                    class="menu-toggle"
+                    type="button"
+                    aria-expanded="false"
+                    aria-controls="site-nav"
+                >
+                    Menú
+                </button>
+                <nav
+                    id="site-nav"
+                    class="site-nav"
+                    aria-label="Secciones de la página"
+                >
+                    <a href="#forecast">Pronóstico</a>
+                    <a href="#details">Por qué Elver</a>
+                </nav>
+                <p class="platforms">iOS + Android</p>
+            </header>
+
+            <main id="main">
+                <section class="hero" aria-labelledby="hero-title">
+                    <div class="hero-grid">
+                        <div class="hero-copy">
+                            <p class="eyebrow">
+                                <span
+                                    class="eyebrow-dot"
+                                    aria-hidden="true"
+                                ></span
+                                >Tiempo guardado para tu zona
+                            </p>
+                            <h1 id="hero-title">
+                                El clima de aquí, <em>cuando lo necesitas.</em>
+                            </h1>
+                            <p class="hero-lede">
+                                Elver guarda el pronóstico reciente para que
+                                sepas cuándo salir, esperar o prepararte, con
+                                señal o sin ella.
+                            </p>
+                            <a class="hero-link" href="#forecast"
+                                >Ver el pronóstico
+                                <span
+                                    class="hero-link-arrow"
+                                    aria-hidden="true"
+                                ></span
+                            ></a>
+                        </div>
+                        <div class="hero-device-wrap" aria-hidden="true">
+                            <div class="hero-device-shadow"></div>
+                            <figure class="device">
+                                <div class="device-speaker"></div>
+                                <div class="app-preview">
+                                    <div class="app-topline">
+                                        <span>Elver</span
+                                        ><span class="offline-status"
+                                            ><i
+                                                class="status-dot"
+                                                aria-hidden="true"
+                                            ></i>
+                                            <span data-weather-state
+                                                >Guardado</span
+                                            ></span
+                                        >
+                                    </div>
+                                    <p class="app-place">
+                                        <span data-weather-place>Tu zona</span>
+                                        <small>· Ahora</small>
+                                    </p>
+                                    <div class="app-current">
+                                        <span
+                                            class="app-weather-mark"
+                                            aria-hidden="true"
+                                        ></span
+                                        ><strong data-weather-temperature
+                                            >28°</strong
+                                        ><span data-weather-condition
+                                            >Lluvia ligera</span
+                                        >
+                                    </div>
+                                    <div class="app-chart" aria-hidden="true">
+                                        <span></span><span></span><span></span
+                                        ><span></span><span></span><span></span
+                                        ><span></span>
+                                    </div>
+                                    <div class="app-days">
+                                        <span>Ahora<br /><b>28°</b></span
+                                        ><span>14h<br /><b>30°</b></span
+                                        ><span>18h<br /><b>27°</b></span
+                                        ><span>22h<br /><b>25°</b></span>
+                                    </div>
+                                </div>
+                                <div class="device-handle"></div>
+                            </figure>
+                        </div>
+                    </div>
+                    <dl
+                        class="feature-strip"
+                        aria-label="Características principales"
+                    >
+                        <div>
+                            <dt>Próximo cambio</dt>
+                            <dd>Las próximas 24 horas</dd>
+                        </div>
+                        <div>
+                            <dt>Última lectura</dt>
+                            <dd>Reciente, aún sin señal</dd>
+                        </div>
+                        <div>
+                            <dt>Cuando importa</dt>
+                            <dd>Avisos en tu dispositivo</dd>
+                        </div>
+                    </dl>
+                </section>
+
+                <section
+                    id="forecast"
+                    class="forecast-section"
+                    aria-labelledby="forecast-title"
+                >
+                    <div class="section-kicker"><span>Lo que viene</span></div>
+                    <div class="forecast-heading">
+                        <h2 id="forecast-title">
+                            El día cambia.<br /><em>Tu lectura también.</em>
+                        </h2>
+                        <p>
+                            Una vista clara de las próximas horas, con el
+                            contexto suficiente para saber cuándo salir, esperar
+                            o prepararte.
+                        </p>
+                    </div>
+                    <div
+                        class="forecast-board"
+                        role="region"
+                        aria-label="Ejemplo de pronóstico para las próximas 24 horas"
+                    >
+                        <div class="forecast-board-top">
+                            <div>
+                                <strong data-weather-place>Tu zona</strong
+                                ><span class="forecast-date"
+                                    >Hoy · próximas 24 horas</span
+                                >
+                            </div>
+                            <span
+                                ><i class="status-dot" aria-hidden="true"></i>
+                                <span data-weather-updated
+                                    >Ejemplo local</span
+                                ></span
+                            >
+                        </div>
+                        <div class="forecast-timeline">
+                            <button
+                                class="forecast-point forecast-point-active"
+                                type="button"
+                                data-hour-index="0"
+                                aria-pressed="true"
+                            >
+                                <span>Ahora</span><strong>28°</strong
+                                ><small>Lluvia ligera</small>
+                                <div class="rain-bars" aria-hidden="true">
+                                    <i></i><i></i><i></i><i></i><i></i>
+                                </div>
+                            </button>
+                            <button
+                                class="forecast-point"
+                                type="button"
+                                data-hour-index="2"
+                                aria-pressed="false"
+                            >
+                                <span>14h</span><strong>30°</strong
+                                ><small>Parcial</small>
+                                <div class="rain-bars" aria-hidden="true">
+                                    <i></i><i></i><i></i><i></i><i></i>
+                                </div>
+                            </button>
+                            <button
+                                class="forecast-point"
+                                type="button"
+                                data-hour-index="4"
+                                aria-pressed="false"
+                            >
+                                <span>16h</span><strong>29°</strong
+                                ><small>Nublado</small>
+                                <div class="rain-bars" aria-hidden="true">
+                                    <i></i><i></i><i></i><i></i><i></i>
+                                </div>
+                            </button>
+                            <button
+                                class="forecast-point"
+                                type="button"
+                                data-hour-index="6"
+                                aria-pressed="false"
+                            >
+                                <span>18h</span><strong>27°</strong
+                                ><small>Lluvia</small>
+                                <div class="rain-bars" aria-hidden="true">
+                                    <i></i><i></i><i></i><i></i><i></i>
+                                </div>
+                            </button>
+                            <button
+                                class="forecast-point"
+                                type="button"
+                                data-hour-index="8"
+                                aria-pressed="false"
+                            >
+                                <span>20h</span><strong>26°</strong
+                                ><small>Nublado</small>
+                                <div class="rain-bars" aria-hidden="true">
+                                    <i></i><i></i><i></i><i></i><i></i>
+                                </div>
+                            </button>
+                            <button
+                                class="forecast-point"
+                                type="button"
+                                data-hour-index="24"
+                                aria-pressed="false"
+                            >
+                                <span>+24h</span><strong>25°</strong
+                                ><small>Despejado</small>
+                                <div class="rain-bars" aria-hidden="true">
+                                    <i></i><i></i><i></i><i></i><i></i>
+                                </div>
+                            </button>
+                        </div>
+                        <p class="forecast-selection" aria-live="polite">
+                            Selecciona una hora para ver el detalle:
+                            <strong data-weather-selected
+                                >Ahora · 28° · Lluvia ligera</strong
+                            >
+                        </p>
+                    </div>
+                    <div class="forecast-extra">
+                        <div
+                            class="product-shot-placeholder"
+                            role="img"
+                            aria-label="Espacio reservado para una captura real de la aplicación Elver"
+                        >
+                            <span class="placeholder-label"
+                                >Imagen de producto</span
+                            >
+                            <strong>Aquí irá una captura real de Elver.</strong>
+                            <small
+                                >Reemplaza este espacio cuando tengas la
+                                pantalla final de la app.</small
+                            >
+                        </div>
+                        <aside
+                            class="alert-demo"
+                            aria-label="Ejemplo de aviso meteorológico"
+                        >
+                            <span class="placeholder-label"
+                                >Ejemplo de aviso</span
+                            >
+                            <strong>Lluvia en 45 min</strong>
+                            <p>
+                                Una alerta local, clara y útil para decidir a
+                                tiempo.
+                            </p>
+                        </aside>
+                    </div>
+                </section>
+
+                <section
+                    id="details"
+                    class="details-section"
+                    aria-labelledby="details-title"
+                >
+                    <div class="section-kicker">
+                        <span>Hecha para el territorio</span>
+                    </div>
+                    <div class="details-intro">
+                        <h2 id="details-title">
+                            Información que se queda contigo.
+                        </h2>
+                        <p>
+                            Elver no intenta mostrarlo todo. Te ayuda a leer lo
+                            importante de tu zona y conservarlo cuando la
+                            conexión decide desaparecer.
+                        </p>
+                    </div>
+                    <div
+                        class="trust-strip"
+                        aria-label="Razones para usar Elver"
+                    >
+                        <span
+                            ><strong>Sin señal</strong>El último pronóstico
+                            queda guardado.</span
+                        >
+                        <span
+                            ><strong>Datos locales</strong>El clima de tus
+                            lugares, no de cualquier sitio.</span
+                        >
+                        <span
+                            ><strong>Alertas útiles</strong>Avisos configurados
+                            en tu dispositivo.</span
+                        >
+                    </div>
+                    <div class="detail-list">
+                        <article>
+                            <div class="detail-mark detail-mark-sky">
+                                <img
+                                    src="./assets/heroicons/cloud.svg"
+                                    alt=""
+                                />
+                            </div>
+                            <div>
+                                <span class="detail-index">Sin señal</span>
+                                <h3>Consulta lo reciente</h3>
+                                <p>
+                                    El pronóstico guardado vive en tu
+                                    dispositivo, listo para volver a mirarlo
+                                    cuando lo necesites.
+                                </p>
+                            </div>
+                        </article>
+                        <article>
+                            <div
+                                class="detail-mark detail-mark-chart"
+                                aria-hidden="true"
+                            >
+                                <span></span><span></span><span></span>
+                            </div>
+                            <div>
+                                <span class="detail-index">En contexto</span>
+                                <h3>Lee el cambio</h3>
+                                <p>
+                                    Temperatura, lluvia y viento en una vista
+                                    que ayuda a decidir sin ruido visual.
+                                </p>
+                            </div>
+                        </article>
+                        <article>
+                            <div class="detail-mark detail-mark-alert">
+                                <img src="./assets/heroicons/bolt.svg" alt="" />
+                            </div>
+                            <div>
+                                <span class="detail-index">A tiempo</span>
+                                <h3>Recibe avisos locales</h3>
+                                <p>
+                                    Cuando las condiciones importan, el aviso
+                                    llega directo a tu dispositivo.
+                                </p>
+                            </div>
+                        </article>
+                    </div>
+                </section>
+            </main>
+
+            <footer class="site-footer">
+                <div class="footer-top">
+                    <a class="footer-brand" href="./" aria-label="Elver, inicio"
+                        ><img
+                            src="./assets/brand/elver-app-icon.png"
+                            width="44"
+                            height="44"
+                            alt=""
+                        /><span>Elver</span></a
+                    >
+                    <p class="footer-tagline">
+                        Clima local para días que no esperan.
+                    </p>
+                </div>
+                <div class="footer-bottom">
+                    <p class="crafted-by">
+                        Hecho con cuidado por
+                        <a href="https://momotombo.dev/"
+                            ><strong>Momotombo Devs</strong
+                            ><img
+                                src="./assets/brand/momotombo.svg"
+                                width="28"
+                                height="14"
+                                alt=""
+                        /></a>
+                    </p>
+                    <p class="footer-copyright">
+                        © <span data-current-year>2026</span> Elver · iOS +
+                        Android <span aria-hidden="true">·</span>
+                        <a href="./privacy-policy.html">Privacidad / Privacy</a>
+                    </p>
+                </div>
+            </footer>
+        </div>
+    </body>
+</html>

@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="es">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta
+            name="description"
+            content="Política de privacidad de Elver en español e inglés."
+        />
+        <meta name="robots" content="index, follow" />
+        <title>Elver — Política de privacidad / Privacy Policy</title>
+        <link
+            rel="canonical"
+            href="https://momotombodevs.github.io/elver-nativephp-app/privacy-policy.html"
+        />
+        <link
+            rel="icon"
+            type="image/png"
+            href="./favicon-96x96.png"
+            sizes="96x96"
+        />
+        <link rel="stylesheet" href="./styles.css" />
+        <style>
+            .legal-page {
+                max-width: 54rem;
+                margin: 0 auto;
+                padding: 3rem 0 5rem;
+            }
+            .legal-header {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+                gap: 1rem;
+                margin-bottom: 3rem;
+            }
+            .legal-card {
+                background: var(--surface);
+                border-radius: 1.25rem;
+                padding: clamp(1.25rem, 4vw, 3rem);
+                box-shadow: 0 1rem 3rem rgba(26, 16, 38, 0.08);
+            }
+            .legal-card + .legal-card {
+                margin-top: 2rem;
+            }
+            .legal-card h1,
+            .legal-card h2 {
+                color: var(--night);
+            }
+            .legal-card h1 {
+                margin-top: 0;
+                font-size: clamp(2rem, 5vw, 3.5rem);
+            }
+            .legal-card h2 {
+                margin-top: 2rem;
+                font-size: 1.35rem;
+            }
+            .legal-card p,
+            .legal-card li {
+                color: var(--night-soft);
+                line-height: 1.7;
+            }
+            .legal-card li + li {
+                margin-top: 0.45rem;
+            }
+            .legal-meta {
+                color: var(--night-soft);
+                font-size: 0.9rem;
+            }
+            .legal-language {
+                display: inline-block;
+                border: 1px solid #d9c7f2;
+                border-radius: 999px;
+                padding: 0.5rem 0.8rem;
+                font-size: 0.82rem;
+                font-weight: 800;
+            }
+            .legal-warning {
+                border-left: 0.25rem solid var(--sun);
+                padding-left: 1rem;
+            }
+            .legal-footer {
+                margin-top: 2rem;
+                color: var(--night-soft);
+                text-align: center;
+            }
+            @media (max-width: 42rem) {
+                .legal-header {
+                    align-items: flex-start;
+                    flex-direction: column;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <main class="legal-page">
+            <header class="legal-header">
+                <a class="brand" href="./" aria-label="Elver, inicio">
+                    <img
+                        class="brand-logo"
+                        src="./assets/brand/elver-app-icon.png"
+                        width="44"
+                        height="44"
+                        alt=""
+                    />
+                    <span class="brand-name">Elver</span>
+                </a>
+                <span class="legal-language">Español · English</span>
+            </header>
+
+            <article class="legal-card" lang="es">
+                <h1>Política de privacidad</h1>
+                <p class="legal-meta">
+                    <strong>Última actualización:</strong> 29 de septiembre de
+                    2026 · <strong>Contacto:</strong> [CORREO DE PRIVACIDAD]
+                </p>
+                <p>
+                    Elver es una aplicación de clima para iOS y Android. Permite
+                    consultar el pronóstico de lugares guardados, conservar el
+                    último dato disponible sin conexión y crear alertas
+                    climáticas locales.
+                </p>
+
+                <h2>Datos que procesa Elver</h2>
+                <p>
+                    <strong>Ubicación.</strong> Cuando eliges “Usar ubicación
+                    actual”, Elver solicita permiso de ubicación en primer plano
+                    para obtener una coordenada y guardarla como un lugar. No
+                    solicita ni utiliza ubicación en segundo plano para rastrear
+                    tus movimientos. También puedes agregar un lugar
+                    manualmente.
+                </p>
+                <p>
+                    <strong>Datos meteorológicos.</strong> Elver consulta a
+                    Open-Meteo datos asociados a la latitud y longitud del lugar
+                    seleccionado, incluyendo temperatura, humedad,
+                    precipitación, viento, sensación térmica e índice UV. El
+                    último resultado válido se guarda localmente para permitir
+                    la consulta sin conexión.
+                </p>
+                <p>
+                    <strong>Alertas y notificaciones.</strong> Las alertas se
+                    definen en el dispositivo mediante umbrales climáticos. Las
+                    notificaciones son locales; no son mensajes push enviados
+                    desde un servidor de Elver. El sistema operativo puede
+                    retrasar las revisiones por ahorro de batería, permisos o
+                    falta de conectividad.
+                </p>
+                <p>
+                    Elver no requiere una cuenta y no recopila nombres, correos
+                    electrónicos, contactos, fotografías, audio ni
+                    identificadores publicitarios. No incorpora publicidad ni
+                    perfiles de seguimiento en la versión actual.
+                </p>
+
+                <h2>Almacenamiento y proveedores</h2>
+                <p>
+                    Los lugares, pronósticos, preferencias y alertas se
+                    almacenan en SQLite dentro de tu dispositivo. Desinstalar la
+                    aplicación puede eliminar esos datos según el comportamiento
+                    del sistema operativo.
+                </p>
+                <p>
+                    Para obtener el pronóstico, Elver transmite a Open-Meteo las
+                    coordenadas del lugar seleccionado y los parámetros de
+                    consulta necesarios. Consulta también
+                    <a href="https://open-meteo.com/"
+                        >la información de Open-Meteo</a
+                    >
+                    sobre sus condiciones y privacidad.
+                </p>
+
+                <h2>Finalidad y tus opciones</h2>
+                <ul>
+                    <li>Mostrar el pronóstico del lugar que seleccionaste.</li>
+                    <li>
+                        Conservar el último pronóstico disponible sin conexión.
+                    </li>
+                    <li>
+                        Evaluar las alertas que configuraste y mostrar
+                        notificaciones locales.
+                    </li>
+                </ul>
+                <p>
+                    Puedes rechazar o revocar los permisos de ubicación y
+                    notificaciones desde los ajustes del dispositivo. También
+                    puedes editar o eliminar lugares y alertas, o borrar todo el
+                    almacenamiento local desinstalando Elver.
+                </p>
+
+                <h2>Seguridad, menores y cambios</h2>
+                <p>
+                    Los datos de la aplicación permanecen en el almacenamiento
+                    protegido del dispositivo. No podemos garantizar la
+                    seguridad de información que envíes por correo electrónico
+                    fuera del dispositivo. Elver no está dirigida
+                    específicamente a menores ni solicita deliberadamente sus
+                    datos.
+                </p>
+                <p>
+                    Podemos actualizar esta política cuando cambien la
+                    aplicación, los proveedores o las obligaciones legales.
+                    Publicaremos la versión vigente en esta URL y actualizaremos
+                    la fecha de revisión.
+                </p>
+                <p class="legal-warning">
+                    Elver no sustituye avisos oficiales de emergencia ni
+                    servicios meteorológicos de seguridad pública.
+                </p>
+                <p>
+                    Consultas de privacidad:
+                    <strong>[CORREO DE PRIVACIDAD]</strong>
+                </p>
+            </article>
+
+            <article class="legal-card" lang="en">
+                <h1>Privacy Policy</h1>
+                <p class="legal-meta">
+                    <strong>Last updated:</strong> September 29, 2026 ·
+                    <strong>Contact:</strong> [PRIVACY EMAIL]
+                </p>
+                <p>
+                    Elver is a weather app for iOS and Android. It lets you
+                    check forecasts for saved places, keep the latest available
+                    data offline, and create local weather alerts.
+                </p>
+
+                <h2>Data Elver processes</h2>
+                <p>
+                    <strong>Location.</strong> When you choose “Use current
+                    location,” Elver requests foreground location permission to
+                    obtain a coordinate and save it as a place. It does not
+                    request or use background location to track your movements.
+                    You may also add a place manually.
+                </p>
+                <p>
+                    <strong>Weather data.</strong> Elver requests weather data
+                    from Open-Meteo for the latitude and longitude of the
+                    selected place, including temperature, humidity,
+                    precipitation, wind, apparent temperature, and UV index. The
+                    latest valid result is stored locally so it can be viewed
+                    offline.
+                </p>
+                <p>
+                    <strong>Alerts and notifications.</strong> Alerts are
+                    configured on the device using weather thresholds.
+                    Notifications are local; they are not push messages sent
+                    from an Elver server. The operating system may delay checks
+                    because of battery restrictions, permissions, or lack of
+                    connectivity.
+                </p>
+                <p>
+                    Elver does not require an account and does not collect
+                    names, email addresses, contacts, photos, audio, or
+                    advertising identifiers. The current version does not
+                    include advertising or tracking profiles.
+                </p>
+
+                <h2>Storage and providers</h2>
+                <p>
+                    Places, forecasts, preferences, and alerts are stored in
+                    SQLite on your device. Uninstalling the app may remove this
+                    data according to the operating system’s behavior.
+                </p>
+                <p>
+                    To retrieve a forecast, Elver sends the selected place’s
+                    coordinates and the required query parameters to Open-Meteo.
+                    See
+                    <a href="https://open-meteo.com/"
+                        >Open-Meteo’s information</a
+                    >
+                    for its terms and privacy practices.
+                </p>
+
+                <h2>Purpose and your choices</h2>
+                <ul>
+                    <li>Show the forecast for the place you selected.</li>
+                    <li>Keep the latest available forecast for offline use.</li>
+                    <li>
+                        Evaluate your configured alerts and show local
+                        notifications.
+                    </li>
+                </ul>
+                <p>
+                    You can deny or revoke location and notification permissions
+                    in your device settings. You can edit or delete places and
+                    alerts, or remove all local app data by uninstalling Elver.
+                </p>
+
+                <h2>Security, children, and changes</h2>
+                <p>
+                    App data remains in the device’s protected storage. We
+                    cannot guarantee the security of information you send by
+                    email outside the device. Elver is not directed specifically
+                    at children and does not knowingly request children’s
+                    personal data.
+                </p>
+                <p>
+                    We may update this policy when the app, providers, or legal
+                    obligations change. The current version will be published at
+                    this URL with an updated revision date.
+                </p>
+                <p class="legal-warning">
+                    Elver does not replace official emergency warnings or
+                    public-safety weather services.
+                </p>
+                <p>Privacy questions: <strong>[PRIVACY EMAIL]</strong></p>
+            </article>
+
+            <p class="legal-footer">
+                <a href="./">Volver a Elver / Back to Elver</a>
+            </p>
+        </main>
+    </body>
+</html>
