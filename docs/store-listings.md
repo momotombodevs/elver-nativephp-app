@@ -92,6 +92,12 @@ Location is requested only when you choose to use your current location. You can
 
 Weather data is provided by Open-Meteo. Elver does not replace official emergency warnings.
 
+## Launch risk: Open-Meteo / Riesgo de lanzamiento: Open-Meteo
+
+The public web demo uses Open-Meteo directly from the browser and includes visible attribution. The free API is intended for non-commercial use; a promotional or commercial launch requires an appropriate paid plan or another authorized endpoint. Review the [Open-Meteo terms](https://open-meteo.com/en/terms) and [commercial pricing](https://open-meteo.com/en/pricing) before publishing the landing or store campaign.
+
+La demo web pública usa Open-Meteo directamente desde el navegador y muestra la atribución correspondiente. La API gratuita está destinada a uso no comercial; para una promoción o lanzamiento comercial se necesita un plan adecuado u otro endpoint autorizado. Revisar los [términos de Open-Meteo](https://open-meteo.com/en/terms) y sus [planes comerciales](https://open-meteo.com/en/pricing) antes de publicar la landing o una campaña de tienda.
+
 ### App Store promotional text
 
 Local weather for your places, offline data, and local weather alerts.

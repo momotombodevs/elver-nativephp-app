@@ -157,7 +157,7 @@ it('uses a native control for pause and confirms destructive deletion', function
 
     $screen = Native::visit('/alerts')
         ->assertSee('Activa')
-        ->assertSee('Normal')
+        ->assertSee('Superó el valor')
         ->tap('toggle-alert-'.$alert->id)
         ->assertSee('Pausada')
         ->tap('toggle-alert-'.$alert->id)
@@ -195,7 +195,7 @@ it('shows the location, threshold, state, and last activation for every alert', 
 
     Native::visit('/alerts')
         ->assertSee('San Juan del Sur')
-        ->assertSee('Normal')
+        ->assertSee('Superó el valor')
         ->assertSee('Última activación:')
         ->assertAccessible();
 });
