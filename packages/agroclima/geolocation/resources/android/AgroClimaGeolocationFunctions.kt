@@ -17,6 +17,7 @@ import com.nativephp.mobile.bridge.BridgeFunction
 import com.nativephp.mobile.bridge.BridgeResponse
 import com.nativephp.mobile.utils.NativeActionCoordinator
 import org.json.JSONObject
+import kotlin.math.abs
 
 object AgroClimaGeolocationFunctions {
     private const val LOCATION_EVENT = "Native\\Mobile\\Events\\Geolocation\\LocationReceived"
@@ -86,7 +87,7 @@ class GeolocationCoordinator : Fragment(), LocationListener {
     private val permissionRequests = mutableListOf<PermissionRequest>()
     private var permissionRequestInFlight = false
     private var locationRequestInFlight = false
-    private var activeProvider: String? = null
+    private val activeProviders = mutableSetOf<String>()
 
     private val permissionLauncher =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
@@ -172,23 +173,36 @@ class GeolocationCoordinator : Fragment(), LocationListener {
         }
 
         val wantsFineAccuracy = positionRequests.any(PositionRequest::fineAccuracy)
-        val provider = chooseProvider(wantsFineAccuracy)
+        val providers = chooseProviders(wantsFineAccuracy)
 
-        if (provider == null) {
+        if (providers.isEmpty()) {
             failPositions("No hay un proveedor de ubicación compatible con los permisos concedidos.")
             return
         }
 
+        val cachedLocation = providers
+            .mapNotNull(::lastKnownLocation)
+            .filter(::isRecent)
+            .maxByOrNull { it.time }
+
+        if (cachedLocation != null) {
+            dispatchLocation(cachedLocation)
+            return
+        }
+
         try {
-            activeProvider = provider
+            activeProviders.clear()
             locationRequestInFlight = true
-            locationManager.requestLocationUpdates(
-                provider,
-                0L,
-                0f,
-                this,
-                Looper.getMainLooper(),
-            )
+            providers.forEach { provider ->
+                activeProviders += provider
+                locationManager.requestLocationUpdates(
+                    provider,
+                    0L,
+                    0f,
+                    this,
+                    Looper.getMainLooper(),
+                )
+            }
             handler.postDelayed(timeout, LOCATION_TIMEOUT_MS)
         } catch (_: SecurityException) {
             failPositions("El permiso de ubicación no está disponible.")
@@ -197,22 +211,23 @@ class GeolocationCoordinator : Fragment(), LocationListener {
         }
     }
 
-    private fun chooseProvider(fineAccuracy: Boolean): String? {
+    private fun chooseProviders(fineAccuracy: Boolean): List<String> {
         val hasFinePermission = hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+        val providers = mutableListOf<String>()
 
         if (fineAccuracy && hasFinePermission && isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-            return LocationManager.GPS_PROVIDER
+            providers += LocationManager.GPS_PROVIDER
         }
 
         if (isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-            return LocationManager.NETWORK_PROVIDER
+            providers += LocationManager.NETWORK_PROVIDER
         }
 
         if (hasFinePermission && isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-            return LocationManager.GPS_PROVIDER
+            providers += LocationManager.GPS_PROVIDER
         }
 
-        return null
+        return providers.distinct()
     }
 
     private fun isProviderEnabled(provider: String): Boolean =
@@ -223,10 +238,14 @@ class GeolocationCoordinator : Fragment(), LocationListener {
         }
 
     override fun onLocationChanged(location: Location) {
+        dispatchLocation(location)
+    }
+
+    private fun dispatchLocation(location: Location) {
         handler.removeCallbacks(timeout)
         stopLocationUpdates()
         locationRequestInFlight = false
-        activeProvider = null
+        activeProviders.clear()
 
         positionRequests.toList().forEach { request ->
             val payload = JSONObject().apply {
@@ -244,7 +263,7 @@ class GeolocationCoordinator : Fragment(), LocationListener {
     }
 
     override fun onProviderDisabled(provider: String) {
-        if (provider == activeProvider) {
+        if (activeProviders.remove(provider) && activeProviders.isEmpty()) {
             failPositions("El proveedor de ubicación fue desactivado.")
         }
     }
@@ -258,7 +277,7 @@ class GeolocationCoordinator : Fragment(), LocationListener {
             stopLocationUpdates()
         }
         locationRequestInFlight = false
-        activeProvider = null
+        activeProviders.clear()
 
         positionRequests.toList().forEach { dispatchLocationError(it, message) }
         positionRequests.clear()
@@ -320,6 +339,16 @@ class GeolocationCoordinator : Fragment(), LocationListener {
         NativeActionCoordinator.dispatchEvent(requireActivity(), event, payload.toString())
     }
 
+    private fun lastKnownLocation(provider: String): Location? =
+        try {
+            locationManager.getLastKnownLocation(provider)
+        } catch (_: SecurityException) {
+            null
+        }
+
+    private fun isRecent(location: Location): Boolean =
+        abs(System.currentTimeMillis() - location.time) <= LOCATION_CACHE_MAX_AGE_MS
+
     private fun stopLocationUpdates() {
         try {
             locationManager.removeUpdates(this)
@@ -339,6 +368,7 @@ class GeolocationCoordinator : Fragment(), LocationListener {
     companion object {
         private const val FRAGMENT_TAG = "AgroClimaGeolocationCoordinator"
         private const val LOCATION_TIMEOUT_MS = 15_000L
+        private const val LOCATION_CACHE_MAX_AGE_MS = 120_000L
         private const val KEY_PERMISSION_REQUESTED = "permission_requested"
         private const val GRANTED = "granted"
         private const val DENIED = "denied"

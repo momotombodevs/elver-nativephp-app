@@ -138,6 +138,12 @@ private final class GeolocationCoordinator: NSObject, CLLocationManagerDelegate 
             return
         }
 
+        if let cachedLocation = manager.location,
+           abs(Date().timeIntervalSince(cachedLocation.timestamp)) <= 120 {
+            dispatchLocation(cachedLocation)
+            return
+        }
+
         manager.desiredAccuracy = positionRequests.contains(where: \.fineAccuracy)
             ? kCLLocationAccuracyBest
             : kCLLocationAccuracyKilometer
@@ -156,6 +162,11 @@ private final class GeolocationCoordinator: NSObject, CLLocationManagerDelegate 
             failPositions("El dispositivo no devolvió una ubicación válida.")
             return
         }
+
+        dispatchLocation(location)
+    }
+
+    private func dispatchLocation(_ location: CLLocation) {
 
         timeout?.cancel()
         timeout = nil

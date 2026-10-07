@@ -4,6 +4,7 @@ use App\Domain\AgroClima\Contracts\WeatherProvider;
 use App\Domain\AgroClima\Data\WeatherData;
 use App\Domain\AgroClima\Data\WeatherPoint;
 use App\Jobs\RefreshLocationForecast;
+use App\Models\AppSetting;
 use App\Models\ClimateAlert;
 use App\Models\Location;
 use App\Models\WeatherSnapshot;
@@ -18,17 +19,19 @@ use Native\Mobile\Testing\Native;
 uses(LazilyRefreshDatabase::class);
 
 it('registers all four MVP screens with shared native navigation', function () {
-    foreach (['/' => 'Consulta el clima de tu zona.', '/explorer' => 'Sin datos', '/locations' => 'Guarda tu primera ubicación para consultar el clima local.', '/alerts' => 'Después podrás crear alertas.'] as $uri => $copy) {
+    AppSetting::query()->create(['key' => 'onboarding_seen', 'value' => '1']);
+    foreach (['/' => 'Consulta el clima de tu zona.', '/explorer' => 'Sin datos', '/locations' => 'Guarda un lugar para ver su clima.', '/alerts' => 'Después podrás crear alertas.'] as $uri => $copy) {
         Native::visit($uri)
             ->assertSee($copy)
             ->assertSee('Resumen')
             ->assertSee('Gráficas')
             ->assertSee('Ubicaciones')
-            ->assertSee('Alertas');
+            ->assertSee('Alertas')
+            ->assertTabBarVisible();
     }
 });
 
-it('renders the chart explorer and preserves stable point identity in its series', function () {
+it('renders hourly and daily chart points for their selected ranges', function () {
     $location = Location::factory()->default()->create(['name' => 'Parcela Central']);
     WeatherSnapshot::factory()->create([
         'location_id' => $location->id,
@@ -63,7 +66,30 @@ it('renders the chart explorer and preserves stable point identity in its series
 
     $screen->set('rangeChoice', '7 días');
 
-    expect($screen->get('series')[0]['points'][0]['id'])->toBe($firstPointId);
+    expect($screen->get('series')[0]['points'])->toHaveCount(3)
+        ->and($screen->get('series')[0]['points'][0]['x'])->toBe('2026-09-16')
+        ->and($screen->get('chartXAxis')['type'])->toBe('date')
+        ->and($screen->get('selectedPointId'))->toBeNull();
+});
+
+it('refreshes the chart from the native app bar action', function () {
+    $location = Location::factory()->default()->create(['name' => 'Parcela Central']);
+    WeatherSnapshot::factory()->create(['location_id' => $location->id]);
+
+    $provider = Mockery::mock(WeatherProvider::class);
+    $provider->shouldReceive('name')->andReturn('open-meteo');
+    $provider->shouldNotReceive('fetch');
+    app()->instance(WeatherProvider::class, $provider);
+    Queue::fake([RefreshLocationForecast::class]);
+
+    Native::visit('/explorer')
+        ->assertElement('top_bar_action', fn (array $node): bool => ($node['props']['id'] ?? null) === 'refresh-series'
+            && ($node['props']['label'] ?? null) === 'Actualizar')
+        ->tap('Actualizar')
+        ->assertSet('loading', true);
+
+    Queue::assertPushed(RefreshLocationForecast::class, fn (RefreshLocationForecast $job): bool => $job->locationId === $location->id && $job->force === true
+    );
 });
 
 it('renders cached chart data while refreshing stale weather in the queue', function () {
@@ -87,6 +113,57 @@ it('renders cached chart data while refreshing stale weather in the queue', func
 
     Queue::assertPushed(RefreshLocationForecast::class, fn (RefreshLocationForecast $job): bool => $job->locationId === $location->id && $job->force === false
     );
+});
+
+it('automatically refreshes the chart after its forecast cache expires', function () {
+    $location = Location::factory()->default()->create(['name' => 'Parcela Central']);
+    WeatherSnapshot::factory()->create([
+        'location_id' => $location->id,
+        'payload' => agroclimaUiWeatherData()->toArray(),
+    ]);
+
+    $provider = Mockery::mock(WeatherProvider::class);
+    $provider->shouldReceive('name')->andReturn('open-meteo');
+    $provider->shouldNotReceive('fetch');
+    app()->instance(WeatherProvider::class, $provider);
+    Queue::fake([RefreshLocationForecast::class]);
+
+    $screen = Native::visit('/explorer')->assertSet('loading', false);
+    Queue::assertNothingPushed();
+
+    $this->travel(31)->minutes();
+
+    $screen->firePoll('refreshForecastIfNeeded')->assertSet('loading', true);
+
+    Queue::assertPushed(RefreshLocationForecast::class, fn (RefreshLocationForecast $job): bool => $job->locationId === $location->id && $job->force === false
+    );
+
+    $this->travelBack();
+});
+
+it('updates the explorer chart when a fresh cached forecast changes', function () {
+    $location = Location::factory()->default()->create(['name' => 'Parcela Central']);
+    $snapshot = WeatherSnapshot::factory()->create([
+        'location_id' => $location->id,
+        'payload' => agroclimaUiWeatherData()->toArray(),
+    ]);
+    Queue::fake([RefreshLocationForecast::class]);
+
+    $screen = Native::visit('/explorer');
+    $previousValue = $screen->get('series')[0]['points'][0]['value'];
+    $payload = $snapshot->fresh()->payload;
+    $payload['hourly'][0]['values']['temperature_2m'] += 5;
+    $snapshot->update([
+        'payload' => $payload,
+        'fetched_at' => now(),
+        'expires_at' => now()->addMinutes(30),
+    ]);
+
+    $screen->firePoll('refreshForecastIfNeeded');
+
+    expect($screen->get('series')[0]['points'][0]['value'])->toBe($previousValue + 5);
+
+    Queue::assertNothingPushed();
 });
 
 it('saves a GPS result locally and makes the first location principal', function () {
@@ -222,7 +299,7 @@ it('creates and pauses a local climate threshold', function () {
         ->tap('create-alert')
         ->assertNativeCalled('Dialog.Toast', fn (array $params): bool => $params['message'] === 'Alerta guardada.')
         ->assertSee('Temperatura')
-        ->assertSee('mayor que 30,5 °C');
+        ->assertSee('más de 30,5 °C');
 
     $alert = ClimateAlert::query()->sole();
     expect($alert->enabled)->toBeTrue();
@@ -231,6 +308,34 @@ it('creates and pauses a local climate threshold', function () {
         ->assertNativeCalled('Dialog.Toast', fn (array $params): bool => $params['message'] === 'Alerta pausada.');
 
     expect($alert->refresh()->enabled)->toBeFalse();
+});
+
+it('keeps an empty climate alert open and does not save it', function () {
+    Location::factory()->default()->create();
+
+    $screen = Native::visit('/alerts')
+        ->tap('create-alert-action')
+        ->tap('create-alert')
+        ->assertSet('showCreateSheet', true)
+        ->assertSee('Escribe un número válido.');
+
+    expect(ClimateAlert::query()->count())->toBe(0);
+});
+
+it('opens the location and highlights the alert from a notification route', function () {
+    $location = Location::factory()->default()->create(['name' => 'Finca El Sol']);
+    $alert = ClimateAlert::factory()->create(['location_id' => $location->id]);
+    WeatherSnapshot::factory()->create([
+        'location_id' => $location->id,
+        'payload' => agroclimaUiWeatherData()->toArray(),
+    ]);
+
+    Native::fakeBridge();
+
+    Native::visit('/alerts/location/'.$location->id.'/alert/'.$alert->id)
+        ->assertSet('locationId', $location->id)
+        ->assertSet('selectedAlertId', $alert->id)
+        ->assertElement('list_item', fn (array $node): bool => ($node['ref'] ?? null) === 'toggle-alert-'.$alert->id);
 });
 
 function agroclimaUiWeatherData(): WeatherData

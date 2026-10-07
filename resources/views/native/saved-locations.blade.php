@@ -5,7 +5,7 @@
         <native:column ref="locations-empty-state" class="flex-1 w-full items-center justify-center px-8 pb-24 gap-3">
             <native:icon name="location_on" :size="40" class="text-theme-primary" />
             <native:text class="text-lg font-bold text-center text-theme-on-surface">Agrega una ubicación</native:text>
-            <native:text class="text-sm text-center text-theme-on-surface-variant">Guarda tu primera ubicación para consultar el clima local.</native:text>
+            <native:text class="text-sm text-center text-theme-on-surface-variant">Guarda un lugar para ver su clima.</native:text>
             <native:button
                 ref="locations-add-first"
                 class="w-full"
@@ -20,7 +20,7 @@
         <native:list ref="locations-list" class="w-full flex-1">
             <native:list-section
                 header="Mis ubicaciones"
-                footer="Toca para elegir · mantén presionado o desliza para eliminar."
+                footer="Toca para elegir. Desliza para borrar."
             >
                 @foreach ($locations as $location)
                     @if ($location->is_default)
@@ -63,22 +63,55 @@
     detents="0.4,large"
     @dismiss="closeAddLocation"
     a11y-label="Agregar ubicación"
-    a11y-hint="Guarda tu ubicación actual"
+    a11y-hint="Busca una comunidad o usa tu ubicación actual"
 >
     <native:column class="w-full bg-theme-surface p-5 gap-4">
         <native:column class="w-full gap-1">
             <native:text class="text-xl font-bold text-theme-on-surface">Agregar ubicación</native:text>
-            <native:text class="text-sm text-theme-on-surface-variant">Usaremos tu posición actual.</native:text>
+            <native:text class="text-sm text-theme-on-surface-variant">Busca una comunidad o usa tu ubicación.</native:text>
         </native:column>
 
         <native:outlined-text-input
             ref="location-name"
-            label="Nombre"
+            label="Nombre de finca"
             placeholder="Ej. Finca norte"
-            supporting="Opcional"
+            max-length="255"
+            supporting="Opcional; usa el nombre del lugar si lo dejas vacío"
             native:model.blur="name"
-            a11y-label="Nombre de la ubicación"
+            a11y-label="Nombre de la finca"
         />
+
+        <native:outlined-text-input
+            ref="community-search"
+            label="Buscar comunidad"
+            placeholder="Ej. Masaya"
+            max-length="100"
+            native:model.debounce.500ms="communityQuery"
+            a11y-label="Buscar comunidad"
+        />
+
+        @if (mb_strlen(trim($communityQuery)) < 2)
+            <native:text class="text-sm text-theme-on-surface-variant">Escribe al menos 2 letras.</native:text>
+        @elseif ($communitySearchError !== null)
+            <native:text ref="community-search-error" class="text-sm font-semibold text-theme-destructive">{{ $communitySearchError }}</native:text>
+        @elseif ($communityResults !== [])
+            <native:column ref="community-results" class="w-full gap-2">
+                @foreach ($communityResults as $community)
+                    <native:button
+                        ref="community-{{ $community['id'] }}"
+                        class="w-full"
+                        size="sm"
+                        variant="secondary"
+                        @tap="selectCommunity('{{ $community['id'] }}')"
+                        a11y-label="Guardar {{ $community['label'] }}"
+                    >
+                        {{ $community['label'] }}
+                    </native:button>
+                @endforeach
+            </native:column>
+        @else
+            <native:text ref="community-no-results" class="text-sm text-theme-on-surface-variant">No encontramos comunidades con ese nombre.</native:text>
+        @endif
 
         @if ($error !== null)
             <native:text ref="locations-error" class="text-sm font-semibold text-theme-destructive">{{ $error }}</native:text>
@@ -104,10 +137,10 @@
                     :disabled="$locating"
                     :loading="$locating"
                     @tap="useCurrentLocation"
-                    a11y-label="Usar ubicación actual"
+                    a11y-label="Usar mi ubicación"
                     a11y-hint="Solicita permiso y guarda las coordenadas de este dispositivo"
                 >
-                    {{ $locating ? 'Buscando ubicación…' : 'Usar ubicación actual' }}
+                    {{ $locating ? 'Buscando ubicación…' : 'Usar mi ubicación' }}
                 </native:button>
             @endif
         </native:column>

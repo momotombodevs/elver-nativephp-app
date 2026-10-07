@@ -5,6 +5,7 @@ namespace App\NativeComponents;
 use App\Domain\AgroClima\Data\Coordinates;
 use App\Models\Location;
 use App\Services\AgroClima\BackgroundAlertSchedule;
+use App\Services\AgroClima\OpenMeteoCommunitySearch;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
@@ -26,6 +27,13 @@ class SavedLocations extends NativeComponent
     private const MINIMUM_DUPLICATE_RADIUS_METERS = 25.0;
 
     public string $name = '';
+
+    public string $communityQuery = '';
+
+    /** @var list<array{id: string, name: string, label: string, latitude: float, longitude: float, timezone: string}> */
+    public array $communityResults = [];
+
+    public ?string $communitySearchError = null;
 
     public bool $showAddLocation = false;
 
@@ -59,6 +67,7 @@ class SavedLocations extends NativeComponent
         $this->showAddLocation = true;
         $this->error = null;
         $this->locationPermission = 'not_determined';
+        $this->resetCommunitySearch();
     }
 
     public function closeAddLocation(): void
@@ -69,6 +78,94 @@ class SavedLocations extends NativeComponent
         if (! $this->locating) {
             $this->name = '';
         }
+
+        $this->resetCommunitySearch();
+    }
+
+    public function updatedCommunityQuery(string $query): void
+    {
+        $this->communityResults = [];
+        $this->communitySearchError = null;
+        $query = trim($query);
+
+        if (mb_strlen($query) < 2) {
+            return;
+        }
+
+        try {
+            $this->communityResults = app(OpenMeteoCommunitySearch::class)->search($query);
+        } catch (Throwable $exception) {
+            report($exception);
+            $this->communitySearchError = 'No se pudo buscar. Revisa tu conexión.';
+        }
+    }
+
+    public function selectCommunity(string $id): void
+    {
+        $community = null;
+        foreach ($this->communityResults as $result) {
+            if (($result['id'] ?? null) === $id) {
+                $community = $result;
+                break;
+            }
+        }
+
+        if ($community === null) {
+            $this->communitySearchError = 'Vuelve a buscar esa comunidad.';
+
+            return;
+        }
+
+        if (! is_string($community['name'] ?? null) || trim($community['name']) === ''
+            || ! is_numeric($community['latitude'] ?? null) || ! is_numeric($community['longitude'] ?? null)
+            || ! is_string($community['timezone'] ?? null) || ! is_string($community['id'] ?? null)) {
+            $this->communitySearchError = 'El lugar no tiene datos válidos. Busca otro.';
+
+            return;
+        }
+
+        try {
+            $coordinates = new Coordinates((float) $community['latitude'], (float) $community['longitude']);
+            new \DateTimeZone($community['timezone']);
+        } catch (Throwable) {
+            $this->communitySearchError = 'El lugar no tiene datos válidos. Busca otro.';
+
+            return;
+        }
+
+        $name = trim($this->name) !== '' ? trim($this->name) : $community['name'];
+
+        if (mb_strlen($name) > 255) {
+            $this->communitySearchError = 'El nombre de finca no puede superar 255 caracteres.';
+
+            return;
+        }
+
+        try {
+            $location = DB::transaction(function () use ($coordinates, $community, $name): Location {
+                $isFirst = ! Location::query()->exists();
+
+                return Location::query()->create([
+                    'id' => (string) Str::uuid(),
+                    'name' => $name,
+                    'latitude' => $coordinates->latitude,
+                    'longitude' => $coordinates->longitude,
+                    'timezone' => $community['timezone'],
+                    'is_default' => $isFirst,
+                    'sort_order' => ((int) Location::query()->max('sort_order')) + 1,
+                ]);
+            });
+        } catch (Throwable $exception) {
+            report($exception);
+            $this->communitySearchError = 'No se pudo guardar el lugar. Intenta de nuevo.';
+
+            return;
+        }
+
+        $this->name = '';
+        $this->showAddLocation = false;
+        $this->resetCommunitySearch();
+        Dialog::toast("{$location->name} se guardó.", 'short');
     }
 
     public function useCurrentLocation(): void
@@ -416,5 +513,12 @@ class SavedLocations extends NativeComponent
                 ]],
             ])->all(),
         ]);
+    }
+
+    private function resetCommunitySearch(): void
+    {
+        $this->communityQuery = '';
+        $this->communityResults = [];
+        $this->communitySearchError = null;
     }
 }

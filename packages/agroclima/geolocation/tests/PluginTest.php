@@ -57,6 +57,9 @@ it('contains real Android permission and one-shot location handling', function (
         ->toContain('registerForActivityResult')
         ->toContain('RequestMultiplePermissions')
         ->toContain('requestLocationUpdates')
+        ->toContain('getLastKnownLocation')
+        ->toContain('chooseProviders')
+        ->toContain('LocationManager.NETWORK_PROVIDER')
         ->toContain('NativeActionCoordinator.dispatchEvent')
         ->toContain('"timestamp", location.time')
         ->not->toContain('TODO');
@@ -72,6 +75,7 @@ it('contains real iOS permission and one-shot location handling', function () {
         ->toContain('final class CheckPermissions')
         ->toContain('final class RequestPermissions')
         ->toContain('requestWhenInUseAuthorization')
+        ->toContain('manager.location')
         ->toContain('manager.requestLocation()')
         ->toContain('LaravelBridge.shared.send?')
         ->toContain('timeIntervalSince1970 * 1_000')
