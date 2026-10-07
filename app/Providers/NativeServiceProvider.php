@@ -8,6 +8,7 @@ use Donmanueldev\NativephpCharts\NativePHPChartsServiceProvider;
 use Illuminate\Support\ServiceProvider;
 use Native\Mobile\Providers\BrowserServiceProvider;
 use Native\Mobile\UI\NativeUIServiceProvider;
+use S2BR\MobileSplashscreen\MobileSplashscreenServiceProvider;
 
 class NativeServiceProvider extends ServiceProvider
 {
@@ -44,6 +45,7 @@ class NativeServiceProvider extends ServiceProvider
             NativePHPChartsServiceProvider::class,
             AgroClimaGeolocationServiceProvider::class,
             ClimateNotificationsServiceProvider::class,
+            MobileSplashscreenServiceProvider::class,
         ];
     }
 }

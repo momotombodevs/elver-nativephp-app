@@ -303,7 +303,7 @@ return [
         | switch automatically when the device is in dark mode.
         |
         | Values must be hex strings: #RRGGBB or #AARRGGBB. Wrap them in quotes
-        | inside your .env file (e.g. NATIVEPHP_ANDROID_COLOR_PRIMARY="#2563EB")
+        | inside your .env file (e.g. NATIVEPHP_ANDROID_COLOR_PRIMARY="#7F00FF")
         | because '#' starts a comment in .env.
         |
         | Both values/themes.xml and values-night/themes.xml are written from
@@ -311,8 +311,8 @@ return [
         |
         */
         'theme' => [
-            'color_primary' => env('NATIVEPHP_ANDROID_COLOR_PRIMARY', '#2563EB'),
-            'color_primary_night' => env('NATIVEPHP_ANDROID_COLOR_PRIMARY_NIGHT', '#2563EB'),
+            'color_primary' => env('NATIVEPHP_ANDROID_COLOR_PRIMARY', '#7F00FF'),
+            'color_primary_night' => env('NATIVEPHP_ANDROID_COLOR_PRIMARY_NIGHT', '#7F00FF'),
             'color_on_primary' => env('NATIVEPHP_ANDROID_COLOR_ON_PRIMARY', '#FFFFFF'),
         ],
 

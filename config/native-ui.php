@@ -41,60 +41,60 @@ return [
 
         'light' => [
             // Primary brand color — used for filled buttons, active states, key accents.
-            'primary' => '#2563EB',
+            'primary' => '#7F00FF',
             'on-primary' => '#FFFFFF',
 
             // Secondary / muted action color.
-            'secondary' => '#E4EAF4',
-            'on-secondary' => '#24344D',
+            'secondary' => '#EFE5FF',
+            'on-secondary' => '#27004F',
 
             // Surface = cards, sheets, dialogs. Background = page root.
             'surface' => '#FFFFFF',
-            'on-surface' => '#172033',
-            'background' => '#F3F6FA',
-            'on-background' => '#172033',
+            'on-surface' => '#1A1026',
+            'background' => '#F8F5FF',
+            'on-background' => '#1A1026',
 
             // Surface variant = filled text fields, muted tonal surfaces.
             // on-surface-variant = muted label/hint text on those surfaces.
-            'surface-variant' => '#EAF0F7',
-            'on-surface-variant' => '#5F6F85',
+            'surface-variant' => '#F0E8FF',
+            'on-surface-variant' => '#604D78',
 
             // Outline = neutral borders (text fields, dividers, cards).
-            'outline' => '#D5DFEB',
+            'outline' => '#D9C7F2',
 
             // Destructive actions — maps to `variant="destructive"` on components.
             'destructive' => '#B91C1C',
             'on-destructive' => '#FFFFFF',
 
             // Tertiary accent — for highlights, badges, emphasis not covered by primary.
-            'accent' => '#B45309',
+            'accent' => '#006A70',
             'on-accent' => '#FFFFFF',
         ],
 
         'dark' => [
             // Leave empty or partial to auto-derive from `light` (luminance inversion).
             // Specify any token here to override the derived value.
-            'primary' => '#60A5FA',
-            'on-primary' => '#10223D',
+            'primary' => '#7F00FF',
+            'on-primary' => '#FFFFFF',
 
-            'secondary' => '#27364A',
-            'on-secondary' => '#E7EEF8',
+            'secondary' => '#32145A',
+            'on-secondary' => '#F7EEFF',
 
-            'surface' => '#151D29',
-            'on-surface' => '#E7EEF8',
-            'background' => '#0B111A',
-            'on-background' => '#E7EEF8',
+            'surface' => '#170D25',
+            'on-surface' => '#FBF9FF',
+            'background' => '#0F0719',
+            'on-background' => '#FBF9FF',
 
-            'surface-variant' => '#202B3A',
-            'on-surface-variant' => '#AAB8CC',
+            'surface-variant' => '#2A173F',
+            'on-surface-variant' => '#D9C8E9',
 
-            'outline' => '#344257',
+            'outline' => '#5C3D78',
 
             'destructive' => '#F87171',
-            'on-destructive' => '#0F172A',
+            'on-destructive' => '#1A1026',
 
-            'accent' => '#FBBF24',
-            'on-accent' => '#251A00',
+            'accent' => '#75DBD4',
+            'on-accent' => '#0B3433',
         ],
 
         // Corner radii (points / dp).
