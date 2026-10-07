@@ -35,6 +35,7 @@ final readonly class ForecastService
                     stale: true,
                     fetchedAt: $cached->fetchedAt,
                     expiresAt: $cached->expiresAt,
+                    provider: $cached->provider,
                 );
             }
 
@@ -64,7 +65,7 @@ final readonly class ForecastService
             $location->forceFill(['timezone' => $data->timezone])->save();
         }
 
-        return new ForecastResult($data, false, $fetchedAt, $expiresAt);
+        return new ForecastResult($data, false, $fetchedAt, $expiresAt, $this->provider->name());
     }
 
     public function cachedForLocation(Location $location): ?ForecastResult
@@ -97,6 +98,7 @@ final readonly class ForecastService
             stale: ! $expiresAt->isFuture(),
             fetchedAt: $fetchedAt,
             expiresAt: $expiresAt,
+            provider: $snapshot->provider,
         );
     }
 }

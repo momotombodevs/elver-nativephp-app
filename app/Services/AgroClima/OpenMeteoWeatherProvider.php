@@ -4,6 +4,7 @@ namespace App\Services\AgroClima;
 
 use App\Domain\AgroClima\Contracts\WeatherProvider;
 use App\Domain\AgroClima\Data\Coordinates;
+use App\Domain\AgroClima\Data\DailyForecast;
 use App\Domain\AgroClima\Data\WeatherData;
 use App\Domain\AgroClima\Data\WeatherPoint;
 use App\Domain\AgroClima\Enums\WeatherMetric;
@@ -30,8 +31,9 @@ final class OpenMeteoWeatherProvider implements WeatherProvider
             ->get($this->endpoint(), [
                 'latitude' => $coordinates->latitude,
                 'longitude' => $coordinates->longitude,
-                'current' => $this->variables(),
+                'current' => $this->currentVariables(),
                 'hourly' => $this->variables(),
+                'daily' => 'temperature_2m_max,temperature_2m_min,uv_index_max',
                 // Eight calendar days guarantee 168 future hourly points even
                 // when the request happens late in the current day.
                 'forecast_days' => 8,
@@ -65,15 +67,25 @@ final class OpenMeteoWeatherProvider implements WeatherProvider
         ));
     }
 
+    private function currentVariables(): string
+    {
+        return $this->variables().',apparent_temperature,uv_index,wind_direction_10m';
+    }
+
     /** @param array<string, mixed> $payload */
     private function mapPayload(array $payload): WeatherData
     {
         $timezone = $payload['timezone'] ?? null;
+        $utcOffsetSeconds = $payload['utc_offset_seconds'] ?? null;
         $current = $payload['current'] ?? null;
         $hourly = $payload['hourly'] ?? null;
 
         if (! is_string($timezone) || ! is_array($current) || ! is_array($hourly)) {
             throw new InvalidArgumentException('Open-Meteo payload is missing required weather data.');
+        }
+
+        if (! is_int($utcOffsetSeconds)) {
+            throw new InvalidArgumentException('Open-Meteo timezone offset must be an integer.');
         }
 
         $times = $hourly['time'] ?? null;
@@ -109,6 +121,56 @@ final class OpenMeteoWeatherProvider implements WeatherProvider
             );
         }
 
+        $currentDetails = [];
+        foreach ([
+            'apparent_temperature',
+            'uv_index',
+            'wind_direction_10m',
+        ] as $variable) {
+            $currentDetails[$variable] = $this->numberOrNull(
+                $current[$variable] ?? null,
+                "current {$variable}",
+            );
+        }
+
+        $dailyPayload = $payload['daily'] ?? null;
+        if (! is_array($dailyPayload)) {
+            throw new InvalidArgumentException('Open-Meteo daily forecast is missing.');
+        }
+
+        $dailyDates = $dailyPayload['time'] ?? null;
+        if (! is_array($dailyDates) || ! array_is_list($dailyDates)) {
+            throw new InvalidArgumentException('Open-Meteo daily timestamps must be an ordered list.');
+        }
+
+        $dailyValues = [];
+        foreach (['temperature_2m_max', 'temperature_2m_min', 'uv_index_max'] as $variable) {
+            $values = $dailyPayload[$variable] ?? null;
+            if (! is_array($values) || ! array_is_list($values) || count($values) !== count($dailyDates)) {
+                throw new InvalidArgumentException("Open-Meteo daily values for {$variable} are misaligned.");
+            }
+
+            $dailyValues[$variable] = $values;
+        }
+
+        $dailyForecast = [];
+        foreach ($dailyDates as $index => $date) {
+            if (! is_int($date)) {
+                throw new InvalidArgumentException("Open-Meteo daily timestamp at index {$index} must be a Unix timestamp.");
+            }
+
+            $parsedDate = $this->timestamp($date, "daily time at index {$index}")
+                ->addSeconds($utcOffsetSeconds)
+                ->startOfDay();
+
+            $dailyForecast[] = new DailyForecast(
+                date: $parsedDate,
+                maximumTemperature: $this->numberOrNull($dailyValues['temperature_2m_max'][$index], "daily temperature_2m_max at index {$index}"),
+                minimumTemperature: $this->numberOrNull($dailyValues['temperature_2m_min'][$index], "daily temperature_2m_min at index {$index}"),
+                maximumUvIndex: $this->numberOrNull($dailyValues['uv_index_max'][$index], "daily uv_index_max at index {$index}"),
+            );
+        }
+
         return new WeatherData(
             timezone: $timezone,
             current: new WeatherPoint(
@@ -116,6 +178,8 @@ final class OpenMeteoWeatherProvider implements WeatherProvider
                 $currentValues,
             ),
             hourly: $hourlyPoints,
+            currentDetails: $currentDetails,
+            daily: $dailyForecast,
         );
     }
 

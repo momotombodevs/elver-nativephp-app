@@ -11,5 +11,6 @@ final readonly class ForecastResult
         public bool $stale,
         public CarbonImmutable $fetchedAt,
         public CarbonImmutable $expiresAt,
+        public string $provider = 'open-meteo',
     ) {}
 }

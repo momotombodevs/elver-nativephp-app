@@ -15,6 +15,10 @@ final readonly class WeatherData
         public string $timezone,
         public WeatherPoint $current,
         public array $hourly,
+        /** @var array<string, float|null> */
+        public array $currentDetails = [],
+        /** @var list<DailyForecast> */
+        public array $daily = [],
     ) {
         try {
             new DateTimeZone($timezone);
@@ -25,6 +29,18 @@ final readonly class WeatherData
         foreach ($hourly as $point) {
             if (! $point instanceof WeatherPoint) {
                 throw new InvalidArgumentException('Hourly weather data must contain only weather points.');
+            }
+        }
+
+        foreach ($currentDetails as $key => $value) {
+            if (! is_string($key) || ($value !== null && (! is_int($value) && ! is_float($value) || ! is_finite((float) $value)))) {
+                throw new InvalidArgumentException('Current weather details must contain finite numeric values.');
+            }
+        }
+
+        foreach ($daily as $forecast) {
+            if (! $forecast instanceof DailyForecast) {
+                throw new InvalidArgumentException('Daily forecast must contain only daily forecast values.');
             }
         }
     }
@@ -43,7 +59,7 @@ final readonly class WeatherData
         ));
     }
 
-    /** @return array{timezone: string, current: array{at: string, values: array<string, float|null>}, hourly: list<array{at: string, values: array<string, float|null>}>} */
+    /** @return array{timezone: string, current: array{at: string, values: array<string, float|null>}, hourly: list<array{at: string, values: array<string, float|null>}>, current_details: array<string, float|null>, daily: list<array{date: string, maximum_temperature: float|null, minimum_temperature: float|null, maximum_uv_index: float|null}>} */
     public function toArray(): array
     {
         return [
@@ -52,6 +68,11 @@ final readonly class WeatherData
             'hourly' => array_map(
                 fn (WeatherPoint $point): array => $point->toArray(),
                 $this->hourly,
+            ),
+            'current_details' => $this->currentDetails,
+            'daily' => array_map(
+                fn (DailyForecast $forecast): array => $forecast->toArray(),
+                $this->daily,
             ),
         ];
     }
@@ -79,6 +100,24 @@ final readonly class WeatherData
             return WeatherPoint::fromArray($point);
         }, $payload['hourly']);
 
+        $currentDetails = [];
+        foreach (($payload['current_details'] ?? []) as $key => $value) {
+            if (! is_string($key) || ($value !== null && ! is_int($value) && ! is_float($value))) {
+                throw new InvalidArgumentException('Current weather details must be numeric or null.');
+            }
+
+            $currentDetails[$key] = $value === null ? null : (float) $value;
+        }
+
+        $daily = [];
+        foreach (($payload['daily'] ?? []) as $forecast) {
+            if (! is_array($forecast)) {
+                throw new InvalidArgumentException('Daily forecast must be an ordered list.');
+            }
+
+            $daily[] = DailyForecast::fromArray($forecast);
+        }
+
         usort(
             $hourly,
             fn (WeatherPoint $left, WeatherPoint $right): int => $left->at->getTimestamp() <=> $right->at->getTimestamp(),
@@ -88,6 +127,8 @@ final readonly class WeatherData
             timezone: $payload['timezone'],
             current: WeatherPoint::fromArray($payload['current']),
             hourly: $hourly,
+            currentDetails: $currentDetails,
+            daily: $daily,
         );
     }
 }
