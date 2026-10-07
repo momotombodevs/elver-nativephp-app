@@ -5,6 +5,7 @@ use App\NativeComponents\ClimateAlerts;
 use App\NativeComponents\Home;
 use App\NativeComponents\Onboarding;
 use App\NativeComponents\SavedLocations;
+use App\NativeComponents\Settings;
 use App\NativeLayouts\MainTabsLayout;
 use Illuminate\Support\Facades\Route;
 
@@ -16,4 +17,5 @@ Route::nativeGroup(MainTabsLayout::class, function (): void {
     Route::native('/locations', SavedLocations::class);
     Route::native('/alerts', ClimateAlerts::class);
     Route::native('/alerts/location/{locationId}/alert/{alertId}', ClimateAlerts::class);
+    Route::native('/settings', Settings::class);
 });

@@ -4,90 +4,8 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "a34fbe5be3d10d6e940b6d56e9771eed",
+    "content-hash": "4e0872c23546d8fe7f057cf7a911c9fa",
     "packages": [
-        {
-            "name": "agroclima/climate-notifications",
-            "version": "1.0.0",
-            "dist": {
-                "type": "path",
-                "url": "packages/agroclima/climate-notifications",
-                "reference": "08d0fad2b70de589457af99fe7b53bcebde5ecaa"
-            },
-            "require": {
-                "nativephp/mobile": "^4.0",
-                "php": "^8.2"
-            },
-            "type": "nativephp-plugin",
-            "extra": {
-                "laravel": {
-                    "providers": [
-                        "Agroclima\\ClimateNotifications\\ClimateNotificationsServiceProvider"
-                    ]
-                },
-                "nativephp": {
-                    "manifest": "nativephp.json"
-                }
-            },
-            "autoload": {
-                "psr-4": {
-                    "Agroclima\\ClimateNotifications\\": "src/"
-                }
-            },
-            "license": [
-                "MIT"
-            ],
-            "description": "Local notifications and background climate alert checks for Elver",
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
-        {
-            "name": "agroclima/geolocation",
-            "version": "1.0.0",
-            "dist": {
-                "type": "path",
-                "url": "packages/agroclima/geolocation",
-                "reference": "bd5b1938b7eff01f28ae3b43a7ddbc50f479fdf9"
-            },
-            "require": {
-                "nativephp/mobile": "^4.0",
-                "php": "^8.2"
-            },
-            "require-dev": {
-                "pestphp/pest": "^3.0"
-            },
-            "type": "nativephp-plugin",
-            "extra": {
-                "laravel": {
-                    "providers": [
-                        "Agroclima\\Geolocation\\AgroClimaGeolocationServiceProvider"
-                    ]
-                },
-                "nativephp": {
-                    "manifest": "nativephp.json"
-                }
-            },
-            "autoload": {
-                "psr-4": {
-                    "Agroclima\\Geolocation\\": "src/"
-                }
-            },
-            "scripts": {
-                "test": [
-                    "pest"
-                ]
-            },
-            "license": [
-                "MIT"
-            ],
-            "description": "Foreground geolocation bridge for the Elver NativePHP Mobile app",
-            "transport-options": {
-                "symlink": true,
-                "relative": true
-            }
-        },
         {
             "name": "bacon/bacon-qr-code",
             "version": "v3.1.1",
@@ -760,6 +678,88 @@
                 }
             ],
             "time": "2025-03-06T22:45:56+00:00"
+        },
+        {
+            "name": "elver/climate-notifications",
+            "version": "1.0.0",
+            "dist": {
+                "type": "path",
+                "url": "packages/elver/climate-notifications",
+                "reference": "165230f7158d3b52c19b49f16288f6eef999d505"
+            },
+            "require": {
+                "nativephp/mobile": "^4.0",
+                "php": "^8.2"
+            },
+            "type": "nativephp-plugin",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Elver\\ClimateNotifications\\ClimateNotificationsServiceProvider"
+                    ]
+                },
+                "nativephp": {
+                    "manifest": "nativephp.json"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Elver\\ClimateNotifications\\": "src/"
+                }
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "Local notifications and background climate alert checks for Elver",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
+        },
+        {
+            "name": "elver/geolocation",
+            "version": "1.0.0",
+            "dist": {
+                "type": "path",
+                "url": "packages/elver/geolocation",
+                "reference": "7c16c85714c5910fe3248a731682242c180d786b"
+            },
+            "require": {
+                "nativephp/mobile": "^4.0",
+                "php": "^8.2"
+            },
+            "require-dev": {
+                "pestphp/pest": "^3.0"
+            },
+            "type": "nativephp-plugin",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Elver\\Geolocation\\ElverGeolocationServiceProvider"
+                    ]
+                },
+                "nativephp": {
+                    "manifest": "nativephp.json"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Elver\\Geolocation\\": "src/"
+                }
+            },
+            "scripts": {
+                "test": [
+                    "pest"
+                ]
+            },
+            "license": [
+                "MIT"
+            ],
+            "description": "Foreground geolocation bridge for the Elver NativePHP Mobile app",
+            "transport-options": {
+                "symlink": true,
+                "relative": true
+            }
         },
         {
             "name": "endroid/qr-code",

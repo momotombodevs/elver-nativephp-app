@@ -2,9 +2,9 @@
 
 namespace App\Providers;
 
-use Agroclima\ClimateNotifications\ClimateNotificationsServiceProvider;
-use Agroclima\Geolocation\AgroClimaGeolocationServiceProvider;
 use Donmanueldev\NativephpCharts\NativePHPChartsServiceProvider;
+use Elver\ClimateNotifications\ClimateNotificationsServiceProvider;
+use Elver\Geolocation\ElverGeolocationServiceProvider;
 use Illuminate\Support\ServiceProvider;
 use Native\Mobile\Providers\BrowserServiceProvider;
 use Native\Mobile\UI\NativeUIServiceProvider;
@@ -43,7 +43,7 @@ class NativeServiceProvider extends ServiceProvider
             NativeUIServiceProvider::class,
             BrowserServiceProvider::class,
             NativePHPChartsServiceProvider::class,
-            AgroClimaGeolocationServiceProvider::class,
+            ElverGeolocationServiceProvider::class,
             ClimateNotificationsServiceProvider::class,
             MobileSplashscreenServiceProvider::class,
         ];

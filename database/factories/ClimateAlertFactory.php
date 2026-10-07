@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
-use App\Domain\AgroClima\Enums\ThresholdOperator;
-use App\Domain\AgroClima\Enums\WeatherMetric;
+use App\Domain\Weather\Enums\ThresholdOperator;
+use App\Domain\Weather\Enums\WeatherMetric;
 use App\Models\ClimateAlert;
 use App\Models\Location;
 use Illuminate\Database\Eloquent\Factories\Factory;

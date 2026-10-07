@@ -61,10 +61,10 @@ Elver brings forecasts, native charts, saved locations, and climate alerts into 
 ## Project structure
 
 ```text
-app/Domain/AgroClima/       Weather and alert domain contracts
+app/Domain/Weather/       Weather and alert domain contracts
 app/NativeComponents/      Native screen state and interactions
-app/Services/AgroClima/    Forecast, chart, and alert orchestration
-packages/agroclima/         Local geolocation and notification plugins
+app/Services/Weather/    Forecast, chart, and alert orchestration
+packages/elver/         Local geolocation and notification plugins
 resources/views/native/    EDGE views rendered as native UI
 tests/                      Domain, service, job, and native UI coverage
 ```

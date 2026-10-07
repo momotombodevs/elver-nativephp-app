@@ -21,6 +21,7 @@ class MainTabsLayout extends NativeLayout
             ->add(Tab::link('Gráficas', '/explorer', ios: 'chart.xyaxis.line', android: 'monitoring'))
             ->add(Tab::link('Ubicaciones', '/locations', ios: 'map.fill', android: 'map'))
             ->add(Tab::link('Alertas', '/alerts', ios: 'bell.badge.fill', android: 'notifications_active'))
+            ->add(Tab::link('Ajustes', '/settings', ios: 'gearshape.fill', android: 'settings'))
             ->activeColor(theme('primary'))
             ->labelVisibility('labeled');
     }

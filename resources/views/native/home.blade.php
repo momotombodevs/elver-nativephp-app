@@ -1,4 +1,4 @@
-<native:top-bar :title="$this->locationName" :subtitle="$fetchedAt !== null ? 'Actualizado '.$fetchedAt : null" display-mode="inline">
+<native:top-bar title="Resumen de hoy" :subtitle="$fetchedAt !== null ? 'Actualizado '.$fetchedAt : null" display-mode="inline">
     @if ($locationId !== null)
         <native:top-bar-action
             id="refresh-forecast"
@@ -14,11 +14,20 @@
         @if ($locationId === null)
             <native:column ref="summary-empty-state" class="w-full rounded-lg bg-theme-surface p-5 gap-3">
                 <native:icon name="location.slash" :size="32" class="text-theme-primary" />
-                <native:text class="text-xl font-bold text-theme-on-surface">Agrega una ubicación</native:text>
+                <native:text class="text-xl font-bold text-theme-on-surface">Sin ubicación</native:text>
+                <native:text class="text-base font-semibold text-theme-on-surface">Agrega una ubicación</native:text>
                 <native:text class="text-sm text-theme-on-surface-variant">Consulta el clima de tu zona.</native:text>
                 <native:button ref="summary-add-location" class="w-full" size="lg" @navigate="'/locations'" a11y-label="Agregar ubicación">Agregar ubicación</native:button>
             </native:column>
         @else
+            <native:select
+                ref="summary-location"
+                label="Ubicación"
+                :options="$this->locationOptions"
+                native:model="locationChoice"
+                a11y-label="Cambiar ubicación del resumen"
+            />
+
             @if ($error !== null)
                 <native:column ref="summary-error" class="w-full rounded-md border border-theme-destructive p-3 gap-2">
                     <native:text class="text-sm text-theme-destructive">{{ $error }}</native:text>
@@ -40,6 +49,7 @@
 
                 <native:column ref="summary-current-conditions" class="w-full rounded-lg bg-theme-surface p-4 gap-3">
                     <native:text class="text-sm font-semibold text-theme-primary">Condiciones actuales</native:text>
+                    <native:text class="text-xs text-theme-on-surface-variant">Ahora en {{ $this->locationName }}</native:text>
                     @foreach (array_chunk($this->currentConditions, 2) as $conditionRow)
                         <native:row class="w-full gap-3">
                             @foreach ($conditionRow as $condition)
@@ -58,7 +68,7 @@
                         <native:text class="text-sm text-theme-on-surface-variant">Sin datos de lluvia para este periodo.</native:text>
                     @else
                         <native:text class="text-2xl font-bold text-theme-accent">
-                            {{ number_format($this->next24HoursRain['total'], 1, ',', '.') }} mm
+                            {{ number_format($this->next24HoursRain['total'], 1, ',', '.') }} {{ $this->rainUnit }}
                         </native:text>
                         @if ($this->next24HoursRain['partial'])
                             <native:text ref="summary-rain-partial" class="text-sm text-theme-on-surface-variant">
@@ -79,7 +89,7 @@
                     <native:row class="w-full items-center justify-between">
                         <native:column class="gap-1">
                             <native:text class="text-lg font-bold text-theme-on-surface">Próximas 24 horas</native:text>
-                            <native:text class="text-sm text-theme-on-surface-variant">Temperatura · °C</native:text>
+                            <native:text class="text-sm text-theme-on-surface-variant">Temperatura · {{ $this->temperatureYAxis['title'] }}</native:text>
                         </native:column>
                         <native:button variant="secondary" @navigate="'/explorer'">Explorar</native:button>
                     </native:row>
@@ -117,7 +127,10 @@
 
                 @if ($this->currentWeatherDetails !== [])
                     <native:column ref="summary-weather-details" class="w-full rounded-lg bg-theme-surface p-4 gap-3">
-                        <native:text class="text-base font-bold text-theme-on-surface">Más datos</native:text>
+                        <native:row class="w-full items-center justify-between">
+                            <native:text class="text-base font-bold text-theme-on-surface">Más datos</native:text>
+                            <native:button size="sm" variant="secondary" @tap="openMetricHelp">¿Qué significa?</native:button>
+                        </native:row>
                         @foreach (array_chunk($this->currentWeatherDetails, 2) as $detailRow)
                             <native:row class="w-full gap-3">
                                 @foreach ($detailRow as $detail)
@@ -141,3 +154,24 @@
         @endif
     </native:column>
 </native:scroll-view>
+
+@if ($showMetricHelp)
+<native:bottom-sheet :visible="$showMetricHelp" detents="medium" @dismiss="dismissMetricHelp" a11y-label="Ayuda sobre las métricas del clima">
+    <native:column class="w-full bg-theme-surface p-5 gap-4">
+        <native:text class="text-xl font-bold text-theme-on-surface">Cómo leer el clima</native:text>
+        <native:column class="gap-1">
+            <native:text class="text-base font-semibold text-theme-on-surface">Lluvia (mm)</native:text>
+            <native:text class="text-sm text-theme-on-surface-variant">Es la cantidad de agua prevista. 1 mm equivale a 1 litro por metro cuadrado.</native:text>
+        </native:column>
+        <native:column class="gap-1">
+            <native:text class="text-base font-semibold text-theme-on-surface">Índice UV</native:text>
+            <native:text class="text-sm text-theme-on-surface-variant">Indica la intensidad del sol. Mientras más alto, más protección conviene usar.</native:text>
+        </native:column>
+        <native:column class="gap-1">
+            <native:text class="text-base font-semibold text-theme-on-surface">Humedad y sensación térmica</native:text>
+            <native:text class="text-sm text-theme-on-surface-variant">La humedad es el agua en el aire. La sensación térmica combina temperatura, viento y humedad.</native:text>
+        </native:column>
+        <native:button class="w-full" @tap="dismissMetricHelp">Entendido</native:button>
+    </native:column>
+</native:bottom-sheet>
+@endif

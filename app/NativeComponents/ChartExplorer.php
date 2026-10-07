@@ -2,14 +2,15 @@
 
 namespace App\NativeComponents;
 
-use App\Domain\AgroClima\Data\ForecastResult;
-use App\Domain\AgroClima\Data\WeatherData;
-use App\Domain\AgroClima\Enums\WeatherMetric;
+use App\Domain\Weather\Data\ForecastResult;
+use App\Domain\Weather\Data\WeatherData;
+use App\Domain\Weather\Enums\WeatherMetric;
 use App\Models\Location;
-use App\Services\AgroClima\ChartAxisFactory;
-use App\Services\AgroClima\ChartSeriesFactory;
-use App\Services\AgroClima\ForecastRefreshQueue;
-use App\Services\AgroClima\ForecastService;
+use App\Services\Weather\ChartAxisFactory;
+use App\Services\Weather\ChartSeriesFactory;
+use App\Services\Weather\ForecastRefreshQueue;
+use App\Services\Weather\ForecastService;
+use App\Services\Weather\UnitPreferences;
 use Donmanueldev\NativephpCharts\PointSelection;
 use Illuminate\View\View;
 use Native\Mobile\Attributes\Computed;
@@ -209,7 +210,7 @@ class ChartExplorer extends NativeComponent
     #[Computed]
     public function chartYAxis(): array
     {
-        return app(ChartAxisFactory::class)->yAxis($this->metric(), $this->series);
+        return app(ChartAxisFactory::class)->yAxis($this->metric(), $this->series, $this->metricUnit($this->metric()));
     }
 
     /** @return array<string, bool|string> */
@@ -393,9 +394,10 @@ class ChartExplorer extends NativeComponent
 
         $seriesFactory = app(ChartSeriesFactory::class);
         $weatherData = WeatherData::fromArray($this->forecast);
-        $this->series = $this->rangeChoice === '7 días'
+        $series = $this->rangeChoice === '7 días'
             ? $seriesFactory->forMetricByDay($location, $weatherData, $this->metric())
             : $seriesFactory->forMetric($location, $weatherData, $this->metric(), 24);
+        $this->series = app(UnitPreferences::class)->series($this->metric(), $series);
 
         if ($this->selectedPointId !== null) {
             $point = $this->point($this->selectedPointId);
@@ -448,12 +450,7 @@ class ChartExplorer extends NativeComponent
 
     private function metricUnit(WeatherMetric $metric): string
     {
-        return match ($metric) {
-            WeatherMetric::Temperature => '°C',
-            WeatherMetric::Humidity => '%',
-            WeatherMetric::Precipitation => 'mm',
-            WeatherMetric::WindSpeed => 'km/h',
-        };
+        return app(UnitPreferences::class)->unit($metric);
     }
 
     private function location(): ?Location

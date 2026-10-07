@@ -2,18 +2,19 @@
 
 namespace App\NativeComponents;
 
-use App\Domain\AgroClima\Data\ForecastResult;
-use App\Domain\AgroClima\Data\WeatherData;
-use App\Domain\AgroClima\Enums\WeatherMetric;
+use App\Domain\Weather\Data\ForecastResult;
+use App\Domain\Weather\Data\WeatherData;
+use App\Domain\Weather\Enums\WeatherMetric;
 use App\Models\AppSetting;
 use App\Models\Location;
-use App\Services\AgroClima\AlertEvaluator;
-use App\Services\AgroClima\BackgroundAlertSchedule;
-use App\Services\AgroClima\ChartAxisFactory;
-use App\Services\AgroClima\ChartSeriesFactory;
-use App\Services\AgroClima\ForecastRefreshQueue;
-use App\Services\AgroClima\ForecastService;
-use App\Services\AgroClima\RainSummaryFactory;
+use App\Services\Weather\AlertEvaluator;
+use App\Services\Weather\BackgroundAlertSchedule;
+use App\Services\Weather\ChartAxisFactory;
+use App\Services\Weather\ChartSeriesFactory;
+use App\Services\Weather\ForecastRefreshQueue;
+use App\Services\Weather\ForecastService;
+use App\Services\Weather\RainSummaryFactory;
+use App\Services\Weather\UnitPreferences;
 use Carbon\CarbonImmutable;
 use Illuminate\View\View;
 use Native\Mobile\Attributes\Computed;
@@ -27,6 +28,8 @@ use Throwable;
 class Home extends NativeComponent
 {
     public ?string $locationId = null;
+
+    public string $locationChoice = '';
 
     /** @var array<string, mixed> */
     public array $forecast = [];
@@ -45,6 +48,8 @@ class Home extends NativeComponent
 
     public ?string $pendingForecastLocationId = null;
 
+    public bool $showMetricHelp = false;
+
     public function mount(): void
     {
         if (AppSetting::query()->whereKey('onboarding_seen')->value('value') !== '1') {
@@ -58,10 +63,11 @@ class Home extends NativeComponent
 
     public function onResume(): void
     {
-        $default = $this->defaultLocation();
+        $default = $this->location() ?? $this->defaultLocation();
 
         if ($default?->id !== $this->locationId) {
             $this->locationId = $default?->id;
+            $this->locationChoice = $default === null ? '' : $this->locationLabel($default);
             $this->forecast = [];
             $this->stale = false;
             $this->fetchedAt = null;
@@ -73,9 +79,36 @@ class Home extends NativeComponent
         $this->refreshForecastIfNeeded();
     }
 
+    public function updatedLocationChoice(string $choice): void
+    {
+        $location = Location::query()->find($this->locationChoiceMap()[$choice] ?? null);
+
+        if ($location === null || $location->id === $this->locationId) {
+            return;
+        }
+
+        $this->locationId = $location->id;
+        $this->forecast = [];
+        $this->stale = false;
+        $this->fetchedAt = null;
+        $this->clearPendingForecastRefresh();
+        $this->loading = false;
+        $this->loadForecast();
+    }
+
     public function refreshForecast(): void
     {
         $this->loadForecast(force: true);
+    }
+
+    public function openMetricHelp(): void
+    {
+        $this->showMetricHelp = true;
+    }
+
+    public function dismissMetricHelp(): void
+    {
+        $this->showMetricHelp = false;
     }
 
     #[Poll(300_000)]
@@ -130,10 +163,11 @@ class Home extends NativeComponent
         return collect(WeatherMetric::cases())
             ->map(function (WeatherMetric $metric) use ($data): array {
                 $value = $data->currentValue($metric);
+                $displayValue = $value === null ? null : app(UnitPreferences::class)->fromBase($metric, $value);
 
                 return [
                     'label' => $this->metricLabel($metric),
-                    'value' => $value === null ? '—' : number_format($value, $metric === WeatherMetric::Precipitation ? 1 : 0, ',', '.'),
+                    'value' => $displayValue === null ? '—' : number_format($displayValue, $metric === WeatherMetric::Precipitation ? 1 : 0, ',', '.'),
                     'unit' => $this->metricUnit($metric),
                 ];
             })
@@ -150,12 +184,12 @@ class Home extends NativeComponent
             return [];
         }
 
-        return app(ChartSeriesFactory::class)->forMetric(
+        return app(UnitPreferences::class)->series(WeatherMetric::Temperature, app(ChartSeriesFactory::class)->forMetric(
             $location,
             WeatherData::fromArray($this->forecast),
             WeatherMetric::Temperature,
             24,
-        );
+        ));
     }
 
     /** @return array{total: float|null, reportedHours: int, expectedHours: int, partial: bool, noData: bool, hasRain: bool, periods: list<string>} */
@@ -174,7 +208,13 @@ class Home extends NativeComponent
             ];
         }
 
-        return app(RainSummaryFactory::class)->forNext24Hours(WeatherData::fromArray($this->forecast));
+        $summary = app(RainSummaryFactory::class)->forNext24Hours(WeatherData::fromArray($this->forecast));
+
+        if ($summary['total'] !== null) {
+            $summary['total'] = app(UnitPreferences::class)->fromBase(WeatherMetric::Precipitation, $summary['total']);
+        }
+
+        return $summary;
     }
 
     /** @return list<array{label: string, value: string, unit: string}> */
@@ -186,8 +226,8 @@ class Home extends NativeComponent
         return [
             [
                 'label' => 'Se siente como',
-                'value' => $this->formattedDetail($details['apparent_temperature'] ?? null),
-                'unit' => '°C',
+                'value' => $this->formattedMetricDetail(WeatherMetric::Temperature, $details['apparent_temperature'] ?? null),
+                'unit' => $this->metricUnit(WeatherMetric::Temperature),
             ],
             [
                 'label' => 'Índice UV',
@@ -213,8 +253,8 @@ class Home extends NativeComponent
 
             return [
                 'date' => $date?->translatedFormat('D j M') ?? '—',
-                'maximum' => $this->formattedDetail($day['maximum_temperature'] ?? null, 0).' °C',
-                'minimum' => $this->formattedDetail($day['minimum_temperature'] ?? null, 0).' °C',
+                'maximum' => $this->formattedMetricDetail(WeatherMetric::Temperature, $day['maximum_temperature'] ?? null, 0).' '.$this->metricUnit(WeatherMetric::Temperature),
+                'minimum' => $this->formattedMetricDetail(WeatherMetric::Temperature, $day['minimum_temperature'] ?? null, 0).' '.$this->metricUnit(WeatherMetric::Temperature),
                 'uv' => 'UV '.$this->formattedDetail($day['maximum_uv_index'] ?? null, 1),
             ];
         }, array_slice($this->forecast['daily'] ?? [], 0, 5));
@@ -233,7 +273,11 @@ class Home extends NativeComponent
     #[Computed]
     public function temperatureYAxis(): array
     {
-        return app(ChartAxisFactory::class)->yAxis(WeatherMetric::Temperature, $this->temperatureSeries);
+        return app(ChartAxisFactory::class)->yAxis(
+            WeatherMetric::Temperature,
+            $this->temperatureSeries,
+            $this->metricUnit(WeatherMetric::Temperature),
+        );
     }
 
     #[Computed]
@@ -263,7 +307,9 @@ class Home extends NativeComponent
 
     private function loadDefaultLocation(): void
     {
-        $this->locationId = $this->defaultLocation()?->id;
+        $location = $this->defaultLocation();
+        $this->locationId = $location?->id;
+        $this->locationChoice = $location === null ? '' : $this->locationLabel($location);
         $this->loadForecast();
     }
 
@@ -426,12 +472,20 @@ class Home extends NativeComponent
 
     private function metricUnit(WeatherMetric $metric): string
     {
-        return match ($metric) {
-            WeatherMetric::Temperature => '°C',
-            WeatherMetric::Humidity => '%',
-            WeatherMetric::Precipitation => 'mm',
-            WeatherMetric::WindSpeed => 'km/h',
-        };
+        return app(UnitPreferences::class)->unit($metric);
+    }
+
+    /** @return list<string> */
+    #[Computed]
+    public function locationOptions(): array
+    {
+        return array_keys($this->locationChoiceMap());
+    }
+
+    #[Computed]
+    public function rainUnit(): string
+    {
+        return $this->metricUnit(WeatherMetric::Precipitation);
     }
 
     private function formattedDetail(mixed $value, int $decimals = 0): string
@@ -441,6 +495,48 @@ class Home extends NativeComponent
         }
 
         return number_format((float) $value, $decimals, ',', '.');
+    }
+
+    private function formattedMetricDetail(WeatherMetric $metric, mixed $value, int $decimals = 0): string
+    {
+        if (! is_int($value) && ! is_float($value)) {
+            return '—';
+        }
+
+        return app(UnitPreferences::class)->format($metric, (float) $value, $decimals);
+    }
+
+    /** @return array<string, string> */
+    private function locationChoiceMap(): array
+    {
+        $locations = Location::query()
+            ->orderByDesc('is_default')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+        $nameCounts = $locations->countBy('name');
+        $bases = $locations->map(fn (Location $location): string => $nameCounts[$location->name] === 1
+            ? $location->name
+            : sprintf('%s · %.4f, %.4f', $location->name, $location->latitude, $location->longitude));
+        $baseCounts = $bases->countBy();
+        $occurrences = [];
+        $choices = [];
+
+        foreach ($locations as $index => $location) {
+            $base = $bases[$index];
+            $occurrences[$base] = ($occurrences[$base] ?? 0) + 1;
+            $label = $baseCounts[$base] === 1
+                ? $base
+                : $base.' · '.($location->is_default ? 'Principal' : 'Punto '.$occurrences[$base]);
+            $choices[$label] = $location->id;
+        }
+
+        return $choices;
+    }
+
+    private function locationLabel(Location $location): string
+    {
+        return array_search($location->id, $this->locationChoiceMap(), true) ?: $location->name;
     }
 
     private function windDirection(mixed $degrees): string

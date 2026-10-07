@@ -2,8 +2,8 @@
 
 namespace Database\Factories;
 
-use App\Domain\AgroClima\Data\WeatherData;
-use App\Domain\AgroClima\Data\WeatherPoint;
+use App\Domain\Weather\Data\WeatherData;
+use App\Domain\Weather\Data\WeatherPoint;
 use App\Models\Location;
 use App\Models\WeatherSnapshot;
 use Carbon\CarbonImmutable;

@@ -2,10 +2,10 @@
 
 namespace App\NativeComponents;
 
-use App\Domain\AgroClima\Data\Coordinates;
+use App\Domain\Weather\Data\Coordinates;
 use App\Models\Location;
-use App\Services\AgroClima\BackgroundAlertSchedule;
-use App\Services\AgroClima\OpenMeteoCommunitySearch;
+use App\Services\Weather\BackgroundAlertSchedule;
+use App\Services\Weather\OpenMeteoCommunitySearch;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\View\View;

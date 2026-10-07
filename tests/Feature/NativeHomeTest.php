@@ -1,6 +1,6 @@
 <?php
 
-use App\Domain\AgroClima\Contracts\WeatherProvider;
+use App\Domain\Weather\Contracts\WeatherProvider;
 use App\Jobs\RefreshLocationForecast;
 use App\Models\AppSetting;
 use App\Models\Location;
@@ -68,6 +68,23 @@ it('renders cached current conditions and a native chart', function () {
         ->assertElement('line_chart', fn (array $node): bool => ($node['ref'] ?? null) === 'summary-temperature-chart'
             && ($node['props']['a11y_label'] ?? null) === 'Temperatura prevista para las próximas 24 horas en Finca El Sol')
         ->assertAccessible();
+});
+
+it('changes the summary location without changing the primary location', function () {
+    AppSetting::query()->create(['key' => 'onboarding_seen', 'value' => '1']);
+    $first = Location::factory()->default()->create(['name' => 'Managua']);
+    $second = Location::factory()->create(['name' => 'León']);
+    WeatherSnapshot::factory()->create(['location_id' => $first->id]);
+    WeatherSnapshot::factory()->create(['location_id' => $second->id]);
+    Queue::fake([RefreshLocationForecast::class]);
+
+    Native::visit('/')
+        ->assertSee('Managua')
+        ->set('locationChoice', 'León')
+        ->assertSet('locationId', $second->id)
+        ->assertSee('León');
+
+    expect($first->fresh()->is_default)->toBeTrue();
 });
 
 it('refreshes weather from the top bar action', function () {

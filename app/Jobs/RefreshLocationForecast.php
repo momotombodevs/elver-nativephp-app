@@ -3,8 +3,8 @@
 namespace App\Jobs;
 
 use App\Models\Location;
-use App\Services\AgroClima\ForecastRefreshQueue;
-use App\Services\AgroClima\ForecastService;
+use App\Services\Weather\ForecastRefreshQueue;
+use App\Services\Weather\ForecastService;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 use Throwable;

@@ -24,7 +24,7 @@
                     </native:text>
                     <native:row class="w-full gap-2">
                         <native:button class="flex-1" variant="secondary" @tap="requestNotificationAccess" a11y-label="Activar avisos">Activar</native:button>
-                        <native:button class="flex-1" variant="secondary" @tap="openNotificationSettings" a11y-label="Abrir ajustes">Ajustes</native:button>
+                        <native:button class="flex-1" variant="secondary" @tap="openNotificationSettings" a11y-label="Abrir ajustes del sistema">Abrir sistema</native:button>
                     </native:row>
                 </native:column>
             @else
@@ -67,8 +67,8 @@
                     ref="toggle-alert-{{ $alert['id'] }}"
                     class="{{ $alert['selected'] ? 'bg-theme-primary/10' : '' }}"
                     headline="{{ $alert['metric'] }}"
-                    supporting="{{ $alert['operator'] }} {{ $alert['threshold'] }} · {{ $alert['state'] }}"
-                    overline="{{ $alert['enabled'] ? 'Activa' : 'Pausada' }}"
+                    supporting="{{ $alert['location'] }} · {{ $alert['operator'] }} {{ $alert['threshold'] }} · {{ $alert['state'] }} · {{ $alert['lastTriggered'] }}"
+                    overline="{{ $alert['enabled'] ? 'Activa' : 'Pausada' }} · {{ $alert['location'] }}"
                     leadingIcon="bell"
                     :trailingCheckbox="$alert['enabled']"
                     on-trailing-change="setAlertEnabled('{{ $alert['id'] }}')"
@@ -77,7 +77,7 @@
                     overlineColor="{{ $alert['enabled'] ? theme('primary') : theme('on-surface-variant') }}"
                     @tap="toggleAlert('{{ $alert['id'] }}')"
                     @longPress="requestDeleteAlert('{{ $alert['id'] }}')"
-                    a11y-label="Alerta de {{ $alert['metric'] }}, {{ $alert['enabled'] ? 'activa' : 'pausada' }}, {{ $alert['operator'] }} {{ $alert['threshold'] }}, {{ $alert['state'] }}"
+                    a11y-label="Alerta de {{ $alert['metric'] }} para {{ $alert['location'] }}, {{ $alert['enabled'] ? 'activa' : 'pausada' }}, {{ $alert['operator'] }} {{ $alert['threshold'] }}, {{ $alert['state'] }}, {{ $alert['lastTriggered'] }}"
                     a11y-hint="Toca para {{ $alert['enabled'] ? 'pausar' : 'activar' }}. Mantén presionado o desliza para eliminar."
                 />
             @endforeach

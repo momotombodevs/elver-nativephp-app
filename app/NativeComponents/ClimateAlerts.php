@@ -2,16 +2,17 @@
 
 namespace App\NativeComponents;
 
-use App\Domain\AgroClima\Enums\AlertState;
-use App\Domain\AgroClima\Enums\ThresholdOperator;
-use App\Domain\AgroClima\Enums\WeatherMetric;
+use App\Domain\Weather\Enums\AlertState;
+use App\Domain\Weather\Enums\ThresholdOperator;
+use App\Domain\Weather\Enums\WeatherMetric;
 use App\Events\ClimateNotificationPermissionResult;
 use App\Models\ClimateAlert;
 use App\Models\Location;
-use App\Services\AgroClima\AlertEvaluator;
-use App\Services\AgroClima\BackgroundAlertSchedule;
-use App\Services\AgroClima\ForecastRefreshQueue;
-use App\Services\AgroClima\ForecastService;
+use App\Services\Weather\AlertEvaluator;
+use App\Services\Weather\BackgroundAlertSchedule;
+use App\Services\Weather\ForecastRefreshQueue;
+use App\Services\Weather\ForecastService;
+use App\Services\Weather\UnitPreferences;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Native\Mobile\Attributes\Computed;
@@ -146,7 +147,7 @@ class ClimateAlerts extends NativeComponent
             'location_id' => $location->id,
             'metric' => $this->metric(),
             'operator' => $this->operator(),
-            'threshold' => (float) $threshold,
+            'threshold' => app(UnitPreferences::class)->toBase($this->metric(), (float) $threshold),
             'enabled' => true,
         ]);
 
@@ -321,9 +322,13 @@ class ClimateAlerts extends NativeComponent
                 'selected' => $alert->id === $this->selectedAlertId,
                 'metric' => $this->metricLabel($alert->metric),
                 'operator' => $alert->operator === ThresholdOperator::Above ? 'más de' : 'menos de',
-                'threshold' => number_format((float) $alert->threshold, 1, ',', '.').' '.$this->metricUnit($alert->metric),
+                'location' => $this->location()?->name ?? 'Sin ubicación',
+                'threshold' => app(UnitPreferences::class)->format($alert->metric, (float) $alert->threshold).' '.$this->metricUnit($alert->metric),
                 'enabled' => $alert->enabled,
                 'state' => $this->stateLabel($alert->last_state),
+                'lastTriggered' => $alert->last_triggered_at === null
+                    ? 'Sin activaciones'
+                    : 'Última activación: '.$alert->last_triggered_at->translatedFormat('j M, g:i a'),
                 'deleteActions' => [[
                     'method' => "requestDeleteAlert('{$alert->id}')",
                     'label' => 'Eliminar',
@@ -508,12 +513,7 @@ class ClimateAlerts extends NativeComponent
 
     private function metricUnit(WeatherMetric $metric): string
     {
-        return match ($metric) {
-            WeatherMetric::Temperature => '°C',
-            WeatherMetric::Humidity => '%',
-            WeatherMetric::Precipitation => 'mm',
-            WeatherMetric::WindSpeed => 'km/h',
-        };
+        return app(UnitPreferences::class)->unit($metric);
     }
 
     private function stateLabel(?AlertState $state): string
