@@ -60,11 +60,42 @@ it('aggregates weekly values by local calendar day', function () {
 
     expect($temperatures)->toHaveCount(2)
         ->and($temperatures[0]['x'])->toBe('2027-01-15')
-        ->and($temperatures[0]['value'])->toBe(28.5)
+        ->and($temperatures[0]['value'])->toBe(28.0)
         ->and($temperatures[1]['x'])->toBe('2027-01-16')
         ->and($temperatures[1]['value'])->toBe(30.0)
         ->and($rainfall[0]['value'])->toBe(1.75)
         ->and($rainfall[1]['value'])->toBe(3.0);
+});
+
+it('limits daily aggregation to seven local calendar dates', function () {
+    $at = CarbonImmutable::parse('2027-01-15T12:30:00Z');
+    $point = fn (int $offset, float $temperature): WeatherPoint => new WeatherPoint(
+        $at->startOfHour()->addHours($offset),
+        [
+            'temperature_2m' => $temperature,
+            'relative_humidity_2m' => 70.0,
+            'precipitation' => 1.0,
+            'wind_speed_10m' => 8.0,
+        ],
+    );
+    $data = new WeatherData(
+        timezone: 'America/Managua',
+        current: $point(0, 28.0),
+        hourly: array_map(fn (int $day): WeatherPoint => $point($day * 24, 28.0 + $day), range(0, 7)),
+    );
+
+    $location = new Location;
+    $location->id = '019d0000-0000-7000-8000-000000000001';
+
+    $points = (new ChartSeriesFactory)->forMetricByDay(
+        $location,
+        $data,
+        WeatherMetric::Temperature,
+    )[0]['points'];
+
+    expect($points)->toHaveCount(7)
+        ->and($points[0]['x'])->toBe('2027-01-15')
+        ->and($points[6]['x'])->toBe('2027-01-21');
 });
 
 it('rejects weekly chart ranges longer than seven days', function () {

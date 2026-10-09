@@ -59,8 +59,9 @@ final class ChartSeriesFactory
             throw new InvalidArgumentException('Chart range must be between 1 and 7 days.');
         }
 
-        $startsAt = $data->current->at->startOfHour();
-        $endsAt = $startsAt->addHours($days * 24);
+        $localCurrent = $data->current->at->setTimezone($data->timezone);
+        $startsAt = $localCurrent->startOfDay();
+        $endsAt = $startsAt->addDays($days);
         $seriesId = "location:{$location->getKey()}:metric:{$metric->value}";
         $dailyValues = [];
 
@@ -84,7 +85,7 @@ final class ChartSeriesFactory
 
             $points[] = [
                 'id' => "{$seriesId}:date:{$date}",
-                'label' => CarbonImmutable::parse($date)->format('d/m'),
+                'label' => CarbonImmutable::createFromFormat('!Y-m-d', $date, $data->timezone)->format('d/m'),
                 'value' => $value,
                 'x' => $date,
             ];
