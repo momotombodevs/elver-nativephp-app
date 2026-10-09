@@ -17,7 +17,7 @@ return [
     |
     */
 
-    'enabled' => (bool) env('MOBILE_SPLASHSCREEN_ENABLED', true),
+    'enabled' => (bool) env('MOBILE_SPLASHSCREEN_ENABLED', false),
 
     /*
     |--------------------------------------------------------------------------

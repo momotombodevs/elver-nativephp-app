@@ -60,7 +60,7 @@ class Home extends NativeComponent
         app(LocalePreferences::class)->apply();
         $this->applyAppearance();
 
-        if (AppSetting::query()->whereKey('onboarding_seen')->value('value') !== '1') {
+        if ($this->shouldShowOnboarding()) {
             $this->replace('/onboarding');
 
             return;
@@ -368,7 +368,7 @@ class Home extends NativeComponent
     {
         $this->finishForecastRefresh();
 
-        if (AppSetting::query()->whereKey('onboarding_seen')->value('value') !== '1') {
+        if ($this->shouldShowOnboarding()) {
             return view('native.onboarding', ['skipAction' => 'skipOnboarding']);
         }
 
@@ -381,6 +381,21 @@ class Home extends NativeComponent
             ['key' => 'onboarding_seen'],
             ['value' => '1'],
         );
+    }
+
+    private function shouldShowOnboarding(): bool
+    {
+        if (AppSetting::query()->whereKey('onboarding_seen')->value('value') === '1') {
+            return false;
+        }
+
+        if (! Location::query()->exists()) {
+            return true;
+        }
+
+        $this->markOnboardingAsSeen();
+
+        return false;
     }
 
     private function applyAppearance(): void

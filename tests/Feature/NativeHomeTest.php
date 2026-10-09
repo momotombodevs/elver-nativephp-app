@@ -24,6 +24,17 @@ it('renders an actionable empty climate summary after onboarding', function () {
         ->assertAccessible();
 });
 
+it('keeps existing locations out of onboarding after an upgrade', function () {
+    Location::factory()->default()->create(['name' => 'Finca El Sol']);
+    Queue::fake([RefreshLocationForecast::class]);
+
+    Native::visit('/')
+        ->assertSee('Finca El Sol')
+        ->assertDontSee('BIENVENIDO A ELVER');
+
+    expect(AppSetting::query()->whereKey('onboarding_seen')->value('value'))->toBe('1');
+});
+
 it('keeps weather details out of the summary until a forecast is available', function () {
     AppSetting::query()->create(['key' => 'onboarding_seen', 'value' => '1']);
     $location = Location::factory()->default()->create();

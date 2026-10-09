@@ -1,4 +1,4 @@
-<native:column class="w-full h-full items-center justify-center p-5 gap-4 bg-theme-background">
+<native:column class="w-full h-full items-center justify-center p-5 gap-4 bg-theme-background" safe-area>
     <native:column class="w-full items-center gap-3 pt-2">
     <native:column class="w-36 h-36 rounded-2xl bg-theme-secondary p-3 items-center justify-center">
             <native:image src="{{ public_path('icon.png') }}" class="w-full h-full rounded-md" fit="2"
