@@ -87,6 +87,7 @@ class GeolocationCoordinator : Fragment(), LocationListener {
     private val permissionRequests = mutableListOf<PermissionRequest>()
     private var permissionRequestInFlight = false
     private var locationRequestInFlight = false
+    private var fineNetworkFallbackUsed = false
     private val activeProviders = mutableSetOf<String>()
 
     private val permissionLauncher =
@@ -105,9 +106,7 @@ class GeolocationCoordinator : Fragment(), LocationListener {
             }
         }
 
-    private val timeout = Runnable {
-        failPositions("No fue posible obtener la ubicación a tiempo.")
-    }
+    private val timeout = Runnable { handleLocationTimeout() }
 
     private val preferences by lazy {
         val current = requireContext().getSharedPreferences(PREFERENCES, Context.MODE_PRIVATE)
@@ -138,6 +137,9 @@ class GeolocationCoordinator : Fragment(), LocationListener {
             return
         }
 
+        if (positionRequests.isEmpty()) {
+            fineNetworkFallbackUsed = false
+        }
         positionRequests += request
         startLocationRequest()
     }
@@ -189,9 +191,14 @@ class GeolocationCoordinator : Fragment(), LocationListener {
             return
         }
 
+        if (wantsFineAccuracy && LocationManager.NETWORK_PROVIDER in providers
+            && LocationManager.GPS_PROVIDER !in providers) {
+            fineNetworkFallbackUsed = true
+        }
+
         val cachedLocation = providers
             .mapNotNull(::lastKnownLocation)
-            .filter(::isRecent)
+            .filter { isRecent(it) && (!wantsFineAccuracy || fineNetworkFallbackUsed || isAcceptablyAccurate(it)) }
             .maxByOrNull { it.time }
 
         if (cachedLocation != null) {
@@ -222,21 +229,26 @@ class GeolocationCoordinator : Fragment(), LocationListener {
 
     private fun chooseProviders(fineAccuracy: Boolean): List<String> {
         val hasFinePermission = hasPermission(Manifest.permission.ACCESS_FINE_LOCATION)
-        val providers = mutableListOf<String>()
+        val gpsEnabled = hasFinePermission && isProviderEnabled(LocationManager.GPS_PROVIDER)
+        val networkEnabled = isProviderEnabled(LocationManager.NETWORK_PROVIDER)
 
-        if (fineAccuracy && hasFinePermission && isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-            providers += LocationManager.GPS_PROVIDER
+        if (fineAccuracy) {
+            return when {
+                gpsEnabled && !fineNetworkFallbackUsed -> listOf(LocationManager.GPS_PROVIDER)
+                networkEnabled -> listOf(LocationManager.NETWORK_PROVIDER)
+                gpsEnabled -> listOf(LocationManager.GPS_PROVIDER)
+                else -> emptyList()
+            }
         }
 
-        if (isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-            providers += LocationManager.NETWORK_PROVIDER
+        return buildList {
+            if (networkEnabled) {
+                add(LocationManager.NETWORK_PROVIDER)
+            }
+            if (gpsEnabled) {
+                add(LocationManager.GPS_PROVIDER)
+            }
         }
-
-        if (hasFinePermission && isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-            providers += LocationManager.GPS_PROVIDER
-        }
-
-        return providers.distinct()
     }
 
     private fun isProviderEnabled(provider: String): Boolean =
@@ -247,6 +259,12 @@ class GeolocationCoordinator : Fragment(), LocationListener {
         }
 
     override fun onLocationChanged(location: Location) {
+        if (positionRequests.any(PositionRequest::fineAccuracy)
+            && !fineNetworkFallbackUsed
+            && !isAcceptablyAccurate(location)) {
+            return
+        }
+
         dispatchLocation(location)
     }
 
@@ -254,6 +272,7 @@ class GeolocationCoordinator : Fragment(), LocationListener {
         handler.removeCallbacks(timeout)
         stopLocationUpdates()
         locationRequestInFlight = false
+        fineNetworkFallbackUsed = false
         activeProviders.clear()
 
         positionRequests.toList().forEach { request ->
@@ -286,6 +305,7 @@ class GeolocationCoordinator : Fragment(), LocationListener {
             stopLocationUpdates()
         }
         locationRequestInFlight = false
+        fineNetworkFallbackUsed = false
         activeProviders.clear()
 
         positionRequests.toList().forEach { dispatchLocationError(it, message) }
@@ -358,6 +378,24 @@ class GeolocationCoordinator : Fragment(), LocationListener {
     private fun isRecent(location: Location): Boolean =
         abs(System.currentTimeMillis() - location.time) <= LOCATION_CACHE_MAX_AGE_MS
 
+    private fun isAcceptablyAccurate(location: Location): Boolean =
+        location.hasAccuracy() && location.accuracy <= FINE_ACCURACY_MAX_METERS
+
+    private fun handleLocationTimeout() {
+        if (positionRequests.any(PositionRequest::fineAccuracy)
+            && !fineNetworkFallbackUsed
+            && isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+            fineNetworkFallbackUsed = true
+            stopLocationUpdates()
+            locationRequestInFlight = false
+            activeProviders.clear()
+            startLocationRequest()
+            return
+        }
+
+        failPositions("No fue posible obtener la ubicación a tiempo.")
+    }
+
     private fun stopLocationUpdates() {
         try {
             locationManager.removeUpdates(this)
@@ -378,6 +416,7 @@ class GeolocationCoordinator : Fragment(), LocationListener {
         private const val FRAGMENT_TAG = "ElverGeolocationCoordinator"
         private const val LOCATION_TIMEOUT_MS = 15_000L
         private const val LOCATION_CACHE_MAX_AGE_MS = 120_000L
+        private const val FINE_ACCURACY_MAX_METERS = 100f
         private const val KEY_PERMISSION_REQUESTED = "permission_requested"
         private const val PREFERENCES = "elver_geolocation"
         private const val LEGACY_PREFERENCES = "agroclima_geolocation"

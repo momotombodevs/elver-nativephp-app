@@ -62,6 +62,8 @@ it('contains real Android permission and one-shot location handling', function (
         ->toContain('LocationManager.NETWORK_PROVIDER')
         ->toContain('private const val PREFERENCES = "elver_geolocation"')
         ->toContain('private const val LEGACY_PREFERENCES = "agroclima_geolocation"')
+        ->toContain('private var fineNetworkFallbackUsed = false')
+        ->toContain('private fun isAcceptablyAccurate(location: Location): Boolean')
         ->toContain('NativeActionCoordinator.dispatchEvent')
         ->toContain('"timestamp", location.time')
         ->not->toContain('TODO');
@@ -78,6 +80,7 @@ it('contains real iOS permission and one-shot location handling', function () {
         ->toContain('final class RequestPermissions')
         ->toContain('requestWhenInUseAuthorization')
         ->toContain('manager.location')
+        ->toContain('private func isAcceptablyAccurate(_ location: CLLocation) -> Bool')
         ->toContain('manager.requestLocation()')
         ->toContain('LaravelBridge.shared.send?')
         ->toContain('timeIntervalSince1970 * 1_000')

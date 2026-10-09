@@ -138,15 +138,18 @@ private final class GeolocationCoordinator: NSObject, CLLocationManagerDelegate 
             return
         }
 
+        let wantsFineAccuracy = positionRequests.contains(where: \.fineAccuracy)
+        manager.desiredAccuracy = wantsFineAccuracy
+            ? kCLLocationAccuracyBest
+            : kCLLocationAccuracyKilometer
+
         if let cachedLocation = manager.location,
-           abs(Date().timeIntervalSince(cachedLocation.timestamp)) <= 120 {
+           abs(Date().timeIntervalSince(cachedLocation.timestamp)) <= 120,
+           !wantsFineAccuracy || isAcceptablyAccurate(cachedLocation) {
             dispatchLocation(cachedLocation)
             return
         }
 
-        manager.desiredAccuracy = positionRequests.contains(where: \.fineAccuracy)
-            ? kCLLocationAccuracyBest
-            : kCLLocationAccuracyKilometer
         locationRequestInFlight = true
         manager.requestLocation()
 
@@ -163,7 +166,15 @@ private final class GeolocationCoordinator: NSObject, CLLocationManagerDelegate 
             return
         }
 
+        if positionRequests.contains(where: \.fineAccuracy) && !isAcceptablyAccurate(location) {
+            return
+        }
+
         dispatchLocation(location)
+    }
+
+    private func isAcceptablyAccurate(_ location: CLLocation) -> Bool {
+        location.horizontalAccuracy >= 0 && location.horizontalAccuracy <= 100
     }
 
     private func dispatchLocation(_ location: CLLocation) {
