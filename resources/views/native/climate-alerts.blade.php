@@ -1,130 +1,221 @@
-<native:top-bar title="Alertas" />
+<native:top-bar title="{{ $fullScreenCreate ? __('ui.alerts.new_alert') : __('ui.alerts.title') }}" back />
 
 <native:column ref="climate-alerts-screen" class="w-full h-full bg-theme-background">
-    <native:column class="w-full p-4 gap-4">
-        @if ($this->locationOptions === [])
-            <native:column ref="alerts-empty-location" class="w-full rounded-lg bg-theme-surface p-5 gap-3">
-                <native:icon name="bell.slash" :size="32" class="text-theme-primary" />
-                <native:text class="text-xl font-bold text-theme-on-surface">Agrega una ubicación</native:text>
-                <native:text class="text-sm text-theme-on-surface-variant">Después podrás crear alertas.</native:text>
-                <native:button class="w-full" size="lg" @navigate="'/locations'">Agregar ubicación</native:button>
-            </native:column>
-        @else
-            @if ($error !== null)
-                <native:text ref="alerts-error" class="text-sm font-semibold text-theme-destructive">{{ $error }}</native:text>
-            @endif
-
-            @if ($notificationAccess === true)
-                <native:text ref="alerts-notification-permission-granted" class="text-sm font-semibold text-theme-accent">Avisos activados</native:text>
-            @elseif ($notificationAccess === false)
-                <native:column ref="alerts-notification-access" class="w-full rounded-lg bg-theme-surface p-4 gap-2">
-                    <native:text class="text-base font-bold text-theme-on-surface">Activa los avisos</native:text>
-                    <native:text ref="alerts-notification-permission-denied" class="text-sm text-theme-on-surface-variant">
-                        {{ $notificationAccessMessage ?? 'Activa los avisos en Ajustes.' }}
-                    </native:text>
-                    <native:row class="w-full gap-2">
-                        <native:button class="flex-1" variant="secondary" @tap="requestNotificationAccess" a11y-label="Activar avisos">Activar</native:button>
-                        <native:button class="flex-1" variant="secondary" @tap="openNotificationSettings" a11y-label="Abrir ajustes del sistema">Abrir sistema</native:button>
-                    </native:row>
-                </native:column>
-            @else
-                <native:row ref="alerts-notification-permission-checking" class="w-full items-center gap-2">
-                    <native:activity-indicator />
-                    <native:text class="text-sm text-theme-on-surface-variant">Revisando permisos…</native:text>
-                </native:row>
-            @endif
-
-            @if ($forecastRefreshLoading)
-                <native:row ref="alerts-forecast-refresh" native:poll="2s" class="w-full items-center gap-2">
-                    <native:activity-indicator />
-                    <native:text class="text-sm text-theme-on-surface-variant">Actualizando clima…</native:text>
-                </native:row>
-            @elseif ($forecastRefreshError !== null)
-                <native:column ref="alerts-forecast-error" class="w-full rounded-md border border-theme-destructive p-3 gap-2">
-                    <native:text class="text-sm text-theme-destructive">{{ $forecastRefreshError }}</native:text>
-                    <native:button class="w-full" variant="secondary" @tap="refreshAlerts">Reintentar</native:button>
-                </native:column>
-            @endif
-
-            <native:text class="text-xl font-bold text-theme-on-surface">Tus alertas</native:text>
-
-            @if ($alertRows === [])
-                <native:column ref="alerts-empty-state" class="w-full items-center rounded-lg border border-theme-outline p-5 gap-2">
-                    <native:icon name="bell" :size="32" class="text-theme-on-surface-variant" />
-                    <native:text class="text-base font-bold text-theme-on-surface">Sin alertas</native:text>
-                    <native:text class="text-sm text-center text-theme-on-surface-variant">Crea un aviso para un valor del clima.</native:text>
-                    <native:button ref="create-alert-action" class="w-full" variant="secondary" @tap="openCreateAlert">Crear alerta</native:button>
-                </native:column>
-            @endif
-        @endif
-    </native:column>
-
-    @if ($alertRows !== [])
-        <native:list class="w-full flex-1" plain separator>
-            @foreach ($alertRows as $alert)
+    @if ($fullScreenCreate)
+        <native:list ref="create-alert-form" class="w-full h-full bg-theme-background" plain separator>
+            <native:list-section
+                header="{{ __('ui.alerts.new_alert') }}"
+                footer="{{ __('ui.alerts.alert_data_a11y') }}"
+            >
                 <native:list-item
-                    key="alert-{{ $alert['id'] }}"
-                    ref="toggle-alert-{{ $alert['id'] }}"
-                    class="{{ $alert['selected'] ? 'bg-theme-primary/10' : '' }}"
-                    headline="{{ $alert['metric'] }}"
-                    supporting="{{ $alert['location'] }} · {{ $alert['operator'] }} {{ $alert['threshold'] }} · {{ $alert['state'] }} · {{ $alert['lastTriggered'] }}"
-                    overline="{{ $alert['enabled'] ? 'Activa' : 'Pausada' }} · {{ $alert['location'] }}"
-                    leadingIcon="bell"
-                    :trailingCheckbox="$alert['enabled']"
-                    on-trailing-change="setAlertEnabled('{{ $alert['id'] }}')"
-                    :trailing-actions="$alert['deleteActions']"
-                    supportingColor="{{ $alert['state'] === 'Superó el valor' ? theme('destructive') : theme('on-surface-variant') }}"
-                    overlineColor="{{ $alert['enabled'] ? theme('primary') : theme('on-surface-variant') }}"
-                    @tap="toggleAlert('{{ $alert['id'] }}')"
-                    @longPress="requestDeleteAlert('{{ $alert['id'] }}')"
-                    a11y-label="Alerta de {{ $alert['metric'] }} para {{ $alert['location'] }}, {{ $alert['enabled'] ? 'activa' : 'pausada' }}, {{ $alert['operator'] }} {{ $alert['threshold'] }}, {{ $alert['state'] }}, {{ $alert['lastTriggered'] }}"
-                    a11y-hint="Toca para {{ $alert['enabled'] ? 'pausar' : 'activar' }}. Mantén presionado o desliza para eliminar."
+                    ref="alert-location"
+                    headline="{{ __('ui.explorer.location') }}"
+                    supporting="{{ $locationChoice }}"
+                    leadingIcon="location_on"
+                    :trailing-menu="$this->locationMenu()"
+                    trailing-a11y-label="{{ __('ui.explorer.location') }}"
+                    :a11y-label="__('ui.alerts.alert_data_a11y')"
                 />
-            @endforeach
+                <native:list-item
+                    ref="quick-alert-rain"
+                    headline="{{ __('ui.alerts.rain') }}"
+                    supporting="{{ __('ui.alerts.quick_notice') }}"
+                    leadingIcon="water_drop"
+                    @tap="chooseQuickAlert('rain')"
+                />
+                <native:list-item
+                    ref="quick-alert-wind"
+                    headline="{{ __('ui.alerts.wind') }}"
+                    supporting="{{ __('ui.alerts.quick_notice') }}"
+                    leadingIcon="air"
+                    @tap="chooseQuickAlert('wind')"
+                />
+                <native:list-item
+                    ref="quick-alert-heat"
+                    headline="{{ __('ui.alerts.heat') }}"
+                    supporting="{{ __('ui.alerts.quick_notice') }}"
+                    leadingIcon="thermostat"
+                    @tap="chooseQuickAlert('heat')"
+                />
+                <native:list-item
+                    ref="quick-alert-cold"
+                    headline="{{ __('ui.alerts.cold') }}"
+                    supporting="{{ __('ui.alerts.quick_notice') }}"
+                    leadingIcon="ac_unit"
+                    @tap="chooseQuickAlert('cold')"
+                />
+                <native:list-item
+                    ref="alert-metric"
+                    headline="{{ __('ui.alerts.what_to_measure') }}"
+                    supporting="{{ $metricChoice }}"
+                    leadingIcon="monitoring"
+                    :trailing-menu="$this->metricMenu()"
+                    trailing-a11y-label="{{ __('ui.alerts.what_to_measure') }}"
+                    :a11y-label="__('ui.alerts.alert_data_a11y')"
+                />
+                <native:list-item
+                    ref="alert-operator"
+                    headline="{{ __('ui.alerts.notify_if') }}"
+                    supporting="{{ $operatorChoice }}"
+                    leadingIcon="tune"
+                    :trailing-menu="$this->operatorMenu()"
+                    trailing-a11y-label="{{ __('ui.alerts.notify_if') }}"
+                    :a11y-label="__('ui.alerts.when_to_notify_a11y')"
+                />
+                <native:filled-text-input
+                    ref="alert-threshold"
+                    :placeholder="__('ui.alerts.example_35')"
+                    label="{{ __('ui.alerts.value', ['unit' => $this->thresholdUnit]) }}"
+                    keyboard="decimal"
+                    native:model.blur="threshold"
+                    :a11y-label="__('ui.alerts.threshold_a11y', ['unit' => $this->thresholdUnit])"
+                />
+            </native:list-section>
+
+            @if ($error !== null)
+                <native:text ref="create-alert-error" class="p-4 text-sm font-semibold text-theme-destructive">{{ $error }}</native:text>
+            @endif
+
+            <native:button ref="create-alert" class="mx-4" size="lg" @tap="createAlert">
+                {{ __('ui.alerts.save_alert') }}
+            </native:button>
         </native:list>
     @else
-        <native:spacer />
+        <native:list ref="alerts-content" class="w-full h-full bg-theme-background" plain separator>
+            @if ($this->locationOptions === [])
+                <native:list-section header="{{ __('ui.alerts.title') }}">
+                    <native:list-item
+                        ref="alerts-empty-location"
+                        headline="{{ __('ui.common.add_location') }}"
+                        supporting="{{ __('ui.alerts.after_location') }}"
+                        leadingIcon="location_off"
+                        trailingIcon="forward"
+                        @navigate="'/locations/add'"
+                    />
+                </native:list-section>
+            @else
+                <native:list-section header="{{ __('ui.explorer.location') }}">
+                    <native:list-item
+                        ref="alerts-location"
+                        headline="{{ __('ui.explorer.location') }}"
+                        supporting="{{ $locationChoice }}"
+                        leadingIcon="location_on"
+                        :trailing-menu="$this->locationMenu()"
+                        trailing-a11y-label="{{ __('ui.explorer.location') }}"
+                        :a11y-label="__('ui.alerts.alert_data_a11y')"
+                    />
+                </native:list-section>
+
+                @if ($error !== null)
+                    <native:text ref="alerts-error" class="p-4 text-sm font-semibold text-theme-destructive">{{ $error }}</native:text>
+                @endif
+
+                <native:list-section header="{{ __('ui.alerts.notifications_active') }}">
+                    @if ($notificationAccessState === 'granted')
+                        <native:list-item
+                            ref="alerts-notification-permission-granted"
+                            headline="{{ __('ui.alerts.notifications_active') }}"
+                            leadingIcon="notifications_active"
+                        />
+                    @elseif ($notificationAccessState === 'denied')
+                        <native:list-item
+                            ref="alerts-notification-access"
+                            headline="{{ __('ui.alerts.enable_notifications') }}"
+                            supporting="{{ $notificationAccessMessage ?? __('ui.alerts.notifications_settings') }}"
+                            leadingIcon="notifications_off"
+                            trailingIcon="forward"
+                            @tap="openNotificationSettings"
+                        />
+                        <native:button variant="secondary" @tap="requestNotificationAccess">
+                            {{ __('ui.common.activate') }}
+                        </native:button>
+                        <native:list-item
+                            ref="alerts-open-system"
+                            headline="{{ __('ui.common.open_system') }}"
+                            leadingIcon="settings"
+                            @tap="openNotificationSettings"
+                        />
+                    @elseif ($notificationAccessState === 'error')
+                        <native:list-item
+                            ref="alerts-notification-error"
+                            headline="{{ __('ui.alerts.retry_permissions') }}"
+                            supporting="{{ $notificationAccessMessage ?? __('ui.alerts.notifications_check_error') }}"
+                            leadingIcon="error_outline"
+                            trailingIcon="refresh"
+                            @tap="refreshNotificationAccess"
+                        />
+                    @else
+                        <native:column ref="alerts-notification-permission-checking" class="w-full items-center justify-center py-4">
+                            <native:activity-indicator ref="alerts-notification-permission-indicator" a11y-label="{{ __('ui.common.checking_permissions') }}" />
+                        </native:column>
+                    @endif
+                </native:list-section>
+
+                @if ($forecastRefreshLoading)
+                    <native:column ref="alerts-forecast-refresh" class="w-full items-center justify-center py-4">
+                        <native:activity-indicator ref="alerts-forecast-refresh-indicator" a11y-label="{{ __('ui.alerts.updating_weather') }}" />
+                    </native:column>
+                @elseif ($forecastRefreshError !== null)
+                    <native:list-item
+                        ref="alerts-forecast-error"
+                        headline="{{ $forecastRefreshError }}"
+                        leadingIcon="error_outline"
+                        trailingIcon="refresh"
+                        @tap="refreshAlerts"
+                    />
+                @endif
+
+                @if ($automaticRecommendations !== [])
+                    <native:list-section header="{{ __('ui.alerts.recommendations_title') }}">
+                        @foreach ($automaticRecommendations as $recommendation)
+                            <native:list-item
+                                ref="automatic-recommendation-{{ $recommendation['code'] }}"
+                                headline="{{ $recommendation['title'] }}"
+                                supporting="{{ $recommendation['message'] }}"
+                                leadingIcon="lightbulb"
+                            />
+                        @endforeach
+                    </native:list-section>
+                @endif
+
+                <native:list-section header="{{ __('ui.alerts.your_alerts') }}">
+                    <native:text ref="alerts-heading" class="px-4 pt-4 text-xl font-bold text-theme-on-surface">{{ __('ui.alerts.your_alerts') }}</native:text>
+                    @if ($alertRows === [])
+                        <native:list-item
+                            ref="create-alert-action"
+                            headline="{{ __('ui.alerts.no_alerts') }}"
+                            supporting="{{ __('ui.alerts.create_for_value') }}"
+                            leadingIcon="notifications_none"
+                            trailingIcon="forward"
+                            @tap="openCreateAlert"
+                        />
+                    @else
+                        @foreach ($alertRows as $alert)
+                            <native:list-item
+                                key="alert-{{ $alert['id'] }}"
+                                ref="toggle-alert-{{ $alert['id'] }}"
+                                headline="{{ $alert['metric'] }}"
+                                supporting="{{ $alert['location'] }} · {{ $alert['operator'] }} {{ $alert['threshold'] }} · {{ $alert['state'] }} · {{ $alert['lastTriggered'] }}"
+                                overline="{{ $alert['enabled'] ? __('ui.alerts.active') : __('ui.alerts.paused') }} · {{ $alert['location'] }}"
+                                leadingIcon="notifications"
+                                :trailingCheckbox="$alert['enabled']"
+                                on-trailing-change="setAlertEnabled('{{ $alert['id'] }}')"
+                                :trailing-actions="$alert['deleteActions']"
+                                :supportingColor="$alert['isExceeded'] ? theme('destructive') : theme('on-surface-variant')"
+                                :overlineColor="$alert['enabled'] ? theme('primary') : theme('on-surface-variant')"
+                                @tap="toggleAlert('{{ $alert['id'] }}')"
+                                @longPress="requestDeleteAlert('{{ $alert['id'] }}')"
+                                :a11y-label="__('ui.alerts.alert_a11y', ['metric' => $alert['metric'], 'location' => $alert['location'], 'status' => $alert['enabled'] ? __('ui.alerts.active') : __('ui.alerts.paused'), 'operator' => $alert['operator'], 'threshold' => $alert['threshold'], 'state' => $alert['state'], 'last_triggered' => $alert['lastTriggered']])"
+                                :a11y-hint="__('ui.alerts.alert_hint', ['action' => $alert['enabled'] ? __('ui.alerts.pause') : __('ui.alerts.activate_lower')])"
+                            />
+                        @endforeach
+                    @endif
+                </native:list-section>
+            @endif
+        </native:list>
+
+        @if ($this->locationOptions !== [])
+            <native:fab ref="add-alert-fab" icon="add" @tap="openCreateAlert" :a11y-label="__('ui.alerts.create_alert')" />
+        @endif
     @endif
 </native:column>
-
-@if ($this->locationOptions !== [])
-    <native:bottom-sheet
-        ref="create-alert-sheet"
-        :visible="$showCreateSheet"
-        detents="medium,large"
-        @dismiss="dismissCreateAlert"
-        a11y-label="Nueva alerta climática"
-    >
-        <native:column class="w-full p-5 gap-4 bg-theme-surface">
-            <native:text class="text-xl font-bold text-theme-on-surface">Nueva alerta</native:text>
-            <native:select ref="alert-location" label="Ubicación" :options="$this->locationOptions" native:model="locationChoice" a11y-label="Ubicación de la alerta" />
-            <native:text class="text-sm font-semibold text-theme-on-surface-variant">Aviso rápido</native:text>
-            <native:row class="w-full gap-2">
-                <native:button ref="quick-alert-rain" class="flex-1" size="sm" variant="secondary" @tap="chooseQuickAlert('rain')">Lluvia</native:button>
-                <native:button ref="quick-alert-wind" class="flex-1" size="sm" variant="secondary" @tap="chooseQuickAlert('wind')">Viento</native:button>
-            </native:row>
-            <native:row class="w-full gap-2">
-                <native:button ref="quick-alert-heat" class="flex-1" size="sm" variant="secondary" @tap="chooseQuickAlert('heat')">Calor</native:button>
-                <native:button ref="quick-alert-cold" class="flex-1" size="sm" variant="secondary" @tap="chooseQuickAlert('cold')">Frío</native:button>
-            </native:row>
-            <native:row class="w-full gap-3">
-                <native:select ref="alert-metric" class="flex-1" label="Qué medir" :options="['Temperatura', 'Humedad', 'Lluvia', 'Viento']" native:model="metricChoice" a11y-label="Dato del clima para el aviso" />
-                <native:select ref="alert-operator" class="flex-1" label="Avisar si" :options="['Más de', 'Menos de']" native:model="operatorChoice" a11y-label="Cuándo avisar" />
-            </native:row>
-            <native:outlined-text-input
-                ref="alert-threshold"
-                label="Valor ({{ $this->thresholdUnit }})"
-                placeholder="Ej. 35"
-                keyboard="decimal"
-                native:model.blur="threshold"
-                a11y-label="Valor del umbral en {{ $this->thresholdUnit }}"
-            />
-            @if ($error !== null)
-                <native:text ref="create-alert-error" class="text-sm font-semibold text-theme-destructive">{{ $error }}</native:text>
-            @endif
-            <native:button ref="create-alert" class="w-full" size="lg" @tap="createAlert">Guardar alerta</native:button>
-        </native:column>
-    </native:bottom-sheet>
-
-    <native:fab ref="add-alert-fab" icon="add" @tap="openCreateAlert" a11y-label="Crear alerta" />
-@endif

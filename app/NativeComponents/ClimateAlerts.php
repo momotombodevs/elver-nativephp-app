@@ -3,21 +3,27 @@
 namespace App\NativeComponents;
 
 use App\Domain\Weather\Enums\AlertState;
+use App\Domain\Weather\Enums\RecommendationPriority;
 use App\Domain\Weather\Enums\ThresholdOperator;
 use App\Domain\Weather\Enums\WeatherMetric;
 use App\Events\ClimateNotificationPermissionResult;
 use App\Models\ClimateAlert;
 use App\Models\Location;
+use App\Services\Localization\LocalePreferences;
 use App\Services\Weather\AlertEvaluator;
 use App\Services\Weather\BackgroundAlertSchedule;
 use App\Services\Weather\ForecastRefreshQueue;
 use App\Services\Weather\ForecastService;
 use App\Services\Weather\UnitPreferences;
+use App\Services\Weather\WeatherRecommendationService;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use Native\Mobile\Attributes\Computed;
 use Native\Mobile\Attributes\Lazy;
 use Native\Mobile\Attributes\On;
+use Native\Mobile\Attributes\Poll;
+use Native\Mobile\Edge\Layouts\Builders\NavAction;
+use Native\Mobile\Edge\Layouts\Builders\TabBarOptions;
 use Native\Mobile\Edge\NativeComponent;
 use Native\Mobile\Events\Alert\ButtonPressed;
 use Native\Mobile\Facades\Dialog;
@@ -33,9 +39,9 @@ class ClimateAlerts extends NativeComponent
 
     public string $locationChoice = '';
 
-    public string $metricChoice = 'Temperatura';
+    public string $metricChoice = '';
 
-    public string $operatorChoice = 'Más de';
+    public string $operatorChoice = '';
 
     public string $threshold = '';
 
@@ -43,7 +49,13 @@ class ClimateAlerts extends NativeComponent
 
     public bool $showCreateSheet = false;
 
+    public bool $fullScreenCreate = false;
+
     public ?bool $notificationAccess = null;
+
+    public string $notificationAccessState = 'checking';
+
+    public int $notificationPermissionCheckAttempts = 0;
 
     public ?string $notificationAccessMessage = null;
 
@@ -61,6 +73,10 @@ class ClimateAlerts extends NativeComponent
 
     public function mount(): void
     {
+        app(LocalePreferences::class)->apply();
+        $this->metricChoice = WeatherMetric::Temperature->label();
+        $this->operatorChoice = __('weather.alerts.comparison_above');
+
         $routeLocation = $this->param('locationId');
         $routeAlert = $this->param('alertId');
         $location = is_string($routeLocation) ? Location::query()->find($routeLocation) : null;
@@ -83,8 +99,71 @@ class ClimateAlerts extends NativeComponent
         app(BackgroundAlertSchedule::class)->sync();
     }
 
+    public function chooseLocation(string $locationId): void
+    {
+        $choice = array_search($locationId, $this->locationChoiceMap(), true);
+
+        if (! is_string($choice)) {
+            return;
+        }
+
+        $this->locationChoice = $choice;
+        $this->updatedLocationChoice($choice);
+    }
+
+    public function chooseMetric(string $choice): void
+    {
+        $this->metricChoice = $choice;
+    }
+
+    public function chooseOperator(string $choice): void
+    {
+        $this->operatorChoice = $choice;
+    }
+
+    /** @return list<NavAction> */
+    public function locationMenu(): array
+    {
+        return collect($this->locationChoiceMap())
+            ->map(fn (string $locationId, string $label): NavAction => NavAction::make('alerts-location-'.$locationId)
+                ->label($label)
+                ->press("chooseLocation('{$locationId}')"))
+            ->values()
+            ->all();
+    }
+
+    /** @return list<NavAction> */
+    public function metricMenu(): array
+    {
+        return collect($this->metricOptions)
+            ->map(fn (string $option, int $index): NavAction => NavAction::make('alerts-metric-'.$index)
+                ->label($option)
+                ->press("chooseMetric('".addcslashes($option, "\\'")."')"))
+            ->values()
+            ->all();
+    }
+
+    /** @return list<NavAction> */
+    public function operatorMenu(): array
+    {
+        return collect($this->operatorOptions)
+            ->map(fn (string $option, int $index): NavAction => NavAction::make('alerts-operator-'.$index)
+                ->label($option)
+                ->press("chooseOperator('".addcslashes($option, "\\'")."')"))
+            ->values()
+            ->all();
+    }
+
     public function onResume(): void
     {
+        $metric = $this->metric();
+        $operator = $this->operator();
+        app(LocalePreferences::class)->apply();
+        $this->metricChoice = $metric->label();
+        $this->operatorChoice = $operator === ThresholdOperator::Below
+            ? __('weather.alerts.comparison_below')
+            : __('weather.alerts.comparison_above');
+
         $location = $this->location()
             ?? Location::query()->orderByDesc('is_default')->orderBy('sort_order')->first();
         $this->locationId = $location?->id;
@@ -93,8 +172,19 @@ class ClimateAlerts extends NativeComponent
         $this->checkNotificationAccess();
     }
 
+    public function tabBarOptions(): ?TabBarOptions
+    {
+        return TabBarOptions::make()->hidden();
+    }
+
     public function openCreateAlert(): void
     {
+        if (! $this->fullScreenCreate) {
+            $this->navigate('/alerts/create');
+
+            return;
+        }
+
         $this->error = null;
         $this->showCreateSheet = true;
     }
@@ -102,16 +192,23 @@ class ClimateAlerts extends NativeComponent
     public function dismissCreateAlert(): void
     {
         $this->error = null;
+
+        if ($this->fullScreenCreate) {
+            $this->back();
+
+            return;
+        }
+
         $this->showCreateSheet = false;
     }
 
     public function chooseQuickAlert(string $choice): void
     {
         $selection = match ($choice) {
-            'rain' => ['Lluvia', 'Más de'],
-            'heat' => ['Temperatura', 'Más de'],
-            'cold' => ['Temperatura', 'Menos de'],
-            'wind' => ['Viento', 'Más de'],
+            'rain' => [WeatherMetric::Precipitation->label(), __('weather.alerts.comparison_above')],
+            'heat' => [WeatherMetric::Temperature->label(), __('weather.alerts.comparison_above')],
+            'cold' => [WeatherMetric::Temperature->label(), __('weather.alerts.comparison_below')],
+            'wind' => [WeatherMetric::WindSpeed->label(), __('weather.alerts.comparison_above')],
             default => null,
         };
 
@@ -129,7 +226,7 @@ class ClimateAlerts extends NativeComponent
         $location = $this->location();
 
         if ($location === null) {
-            $this->error = 'Primero guarda una ubicación.';
+            $this->error = __('ui.alerts.no_location_error');
 
             return;
         }
@@ -137,7 +234,7 @@ class ClimateAlerts extends NativeComponent
         $threshold = filter_var(str_replace(',', '.', trim($this->threshold)), FILTER_VALIDATE_FLOAT);
 
         if ($threshold === false || ! is_finite((float) $threshold)) {
-            $this->error = 'Escribe un número válido.';
+            $this->error = __('ui.alerts.invalid_number');
 
             return;
         }
@@ -161,7 +258,11 @@ class ClimateAlerts extends NativeComponent
             $this->requestNotificationAccess();
         }
 
-        Dialog::toast('Alerta guardada.', 'short');
+        Dialog::toast(__('ui.alerts.saved'), 'short');
+
+        if ($this->fullScreenCreate) {
+            $this->back();
+        }
     }
 
     public function toggleAlert(string $id): void
@@ -196,7 +297,7 @@ class ClimateAlerts extends NativeComponent
             $this->requestNotificationAccess();
         }
 
-        Dialog::toast($enabled ? 'Alerta activada.' : 'Alerta pausada.', 'short');
+        Dialog::toast($enabled ? __('ui.alerts.activated') : __('ui.alerts.paused_toast'), 'short');
     }
 
     public function refreshAlerts(): void
@@ -211,11 +312,11 @@ class ClimateAlerts extends NativeComponent
         }
 
         Dialog::alert(
-            'Eliminar alerta',
-            'Esta alerta se eliminará de forma permanente.',
+            __('ui.alerts.delete_alert'),
+            __('ui.alerts.delete_alert_message'),
             [
-                ['label' => 'Cancelar', 'style' => 'cancel'],
-                ['label' => 'Eliminar', 'style' => 'destructive'],
+                ['label' => __('ui.common.cancel'), 'style' => 'cancel'],
+                ['label' => __('ui.common.delete'), 'style' => 'destructive'],
             ],
         )->id(self::DELETE_ALERT_DIALOG_PREFIX.$id)->show();
     }
@@ -223,7 +324,7 @@ class ClimateAlerts extends NativeComponent
     #[On(ButtonPressed::class)]
     public function handleDeleteConfirmation(string $label, ?string $id = null): void
     {
-        if ($label !== 'Eliminar' || $id === null || ! str_starts_with($id, self::DELETE_ALERT_DIALOG_PREFIX)) {
+        if ($label !== __('ui.common.delete') || $id === null || ! str_starts_with($id, self::DELETE_ALERT_DIALOG_PREFIX)) {
             return;
         }
 
@@ -232,7 +333,7 @@ class ClimateAlerts extends NativeComponent
 
         if ($deleted > 0) {
             app(BackgroundAlertSchedule::class)->sync();
-            Dialog::toast('Alerta eliminada.', 'short');
+            Dialog::toast(__('ui.alerts.deleted'), 'short');
         }
     }
 
@@ -242,13 +343,21 @@ class ClimateAlerts extends NativeComponent
             || ! function_exists('nativephp_can')
             || ! nativephp_can('ClimateNotifications.RequestPermission')) {
             $this->notificationAccess = false;
-            $this->notificationAccessMessage = 'No se pudieron abrir los ajustes.';
+            $this->notificationAccessState = 'error';
+            $this->notificationAccessMessage = __('ui.alerts.notifications_unavailable');
 
             return;
         }
 
+        $this->notificationAccessState = 'checking';
+        $this->notificationPermissionCheckAttempts = 0;
         $this->notificationAccessMessage = null;
         $this->dispatchNotificationAccessRequest('ClimateNotifications.RequestPermission');
+    }
+
+    public function refreshNotificationAccess(): void
+    {
+        $this->checkNotificationAccess();
     }
 
     public function openNotificationSettings(): void
@@ -265,9 +374,11 @@ class ClimateAlerts extends NativeComponent
 
         $this->pendingNotificationAccessId = null;
         $this->notificationAccess = $granted;
+        $this->notificationAccessState = $granted ? 'granted' : 'denied';
+        $this->notificationPermissionCheckAttempts = 0;
         $this->notificationAccessMessage = $granted
             ? null
-            : 'Activa los avisos en Ajustes.';
+            : __('ui.alerts.notifications_settings');
         app(BackgroundAlertSchedule::class)->sync();
     }
 
@@ -277,11 +388,35 @@ class ClimateAlerts extends NativeComponent
             || ! function_exists('nativephp_can')
             || ! nativephp_can('ClimateNotifications.CheckPermission')) {
             $this->notificationAccess = false;
+            $this->notificationAccessState = 'error';
+            $this->notificationAccessMessage = __('ui.alerts.notifications_unavailable');
 
             return;
         }
 
+        $this->notificationAccessState = 'checking';
+        $this->notificationPermissionCheckAttempts = 0;
+        $this->notificationAccessMessage = null;
         $this->dispatchNotificationAccessRequest('ClimateNotifications.CheckPermission');
+    }
+
+    #[Poll(5000)]
+    public function expireNotificationPermissionCheck(): void
+    {
+        if ($this->notificationAccessState !== 'checking' || $this->pendingNotificationAccessId === null) {
+            return;
+        }
+
+        $this->notificationPermissionCheckAttempts++;
+
+        if ($this->notificationPermissionCheckAttempts < 3) {
+            return;
+        }
+
+        $this->pendingNotificationAccessId = null;
+        $this->notificationAccess = false;
+        $this->notificationAccessState = 'error';
+        $this->notificationAccessMessage = __('ui.alerts.notifications_check_error');
     }
 
     private function dispatchNotificationAccessRequest(string $function): void
@@ -308,8 +443,51 @@ class ClimateAlerts extends NativeComponent
         return $this->metricUnit($this->metric());
     }
 
+    /** @return list<string> */
+    #[Computed]
+    public function metricOptions(): array
+    {
+        return array_map(
+            fn (WeatherMetric $metric): string => $metric->label(),
+            WeatherMetric::cases(),
+        );
+    }
+
+    /** @return list<string> */
+    #[Computed]
+    public function operatorOptions(): array
+    {
+        return [
+            __('weather.alerts.comparison_above'),
+            __('weather.alerts.comparison_below'),
+        ];
+    }
+
+    /** @return list<array<string, mixed>> */
+    #[Computed]
+    public function automaticRecommendations(): array
+    {
+        $location = $this->location();
+        $forecast = $location === null ? null : app(ForecastService::class)->cachedForLocation($location);
+
+        if ($forecast === null) {
+            return [];
+        }
+
+        $recommendations = array_filter(
+            app(WeatherRecommendationService::class)->recommendationsFor($forecast->data, $forecast->stale),
+            fn ($recommendation): bool => $recommendation->priority !== RecommendationPriority::Info,
+        );
+
+        return array_map(
+            fn ($recommendation): array => $recommendation->toArray(),
+            array_slice(array_values($recommendations), 0, 2),
+        );
+    }
+
     public function render(): View
     {
+        app(LocalePreferences::class)->apply();
         $this->finishForecastRefresh();
 
         $alerts = $this->locationId === null
@@ -317,21 +495,25 @@ class ClimateAlerts extends NativeComponent
             : ClimateAlert::query()->where('location_id', $this->locationId)->latest()->get();
 
         return view('native.climate-alerts', [
+            'automaticRecommendations' => $this->automaticRecommendations,
             'alertRows' => $alerts->map(fn (ClimateAlert $alert): array => [
                 'id' => $alert->id,
                 'selected' => $alert->id === $this->selectedAlertId,
                 'metric' => $this->metricLabel($alert->metric),
-                'operator' => $alert->operator === ThresholdOperator::Above ? 'más de' : 'menos de',
-                'location' => $this->location()?->name ?? 'Sin ubicación',
+                'operator' => $alert->operator === ThresholdOperator::Above
+                    ? mb_strtolower(__('weather.alerts.comparison_above'))
+                    : mb_strtolower(__('weather.alerts.comparison_below')),
+                'location' => $this->location()?->name ?? __('ui.home.no_location_fallback'),
                 'threshold' => app(UnitPreferences::class)->format($alert->metric, (float) $alert->threshold).' '.$this->metricUnit($alert->metric),
                 'enabled' => $alert->enabled,
                 'state' => $this->stateLabel($alert->last_state),
                 'lastTriggered' => $alert->last_triggered_at === null
-                    ? 'Sin activaciones'
-                    : 'Última activación: '.$alert->last_triggered_at->translatedFormat('j M, g:i a'),
+                    ? __('ui.alerts.no_triggers')
+                    : __('ui.alerts.last_triggered', ['date' => $alert->last_triggered_at->translatedFormat('j M, g:i a')]),
+                'isExceeded' => $alert->last_state === AlertState::Exceeded,
                 'deleteActions' => [[
                     'method' => "requestDeleteAlert('{$alert->id}')",
-                    'label' => 'Eliminar',
+                    'label' => __('ui.common.delete'),
                     'icon' => 'delete',
                     'role' => 'destructive',
                 ]],
@@ -381,7 +563,7 @@ class ClimateAlerts extends NativeComponent
 
         } catch (Throwable $exception) {
             report($exception);
-            $this->forecastRefreshError = 'No se pudo revisar el clima. Intenta de nuevo.';
+            $this->forecastRefreshError = __('ui.alerts.review_error');
             $this->forecastRefreshLoading = false;
             $this->clearPendingForecastRefresh();
         }
@@ -404,7 +586,7 @@ class ClimateAlerts extends NativeComponent
             $this->forecastRefreshError = null;
         } catch (Throwable $exception) {
             report($exception);
-            $this->forecastRefreshError = 'No se pudo revisar el clima.';
+            $this->forecastRefreshError = __('ui.alerts.review_error_short');
             $this->forecastRefreshLoading = false;
             $this->clearPendingForecastRefresh();
         }
@@ -435,7 +617,7 @@ class ClimateAlerts extends NativeComponent
         }
 
         if ($status !== 'complete') {
-            $this->forecastRefreshError = 'No se pudo actualizar el clima. Revisa tu conexión.';
+            $this->forecastRefreshError = __('ui.alerts.refresh_error');
 
             return;
         }
@@ -472,7 +654,9 @@ class ClimateAlerts extends NativeComponent
             $occurrences[$base] = ($occurrences[$base] ?? 0) + 1;
             $label = $baseCounts[$base] === 1
                 ? $base
-                : $base.' · '.($location->is_default ? 'Principal' : 'Punto '.$occurrences[$base]);
+                : $base.' · '.($location->is_default
+                    ? __('ui.locations.primary')
+                    : __('ui.locations.point', ['number' => $occurrences[$base]]));
             $choices[$label] = $location->id;
         }
 
@@ -486,29 +670,35 @@ class ClimateAlerts extends NativeComponent
 
     private function metric(): WeatherMetric
     {
+        foreach (WeatherMetric::cases() as $metric) {
+            if ($this->metricChoice === $metric->label()) {
+                return $metric;
+            }
+        }
+
         return match ($this->metricChoice) {
-            'Humedad' => WeatherMetric::Humidity,
-            'Lluvia', 'Precipitación' => WeatherMetric::Precipitation,
-            'Viento' => WeatherMetric::WindSpeed,
+            'Humedad', 'Humidity' => WeatherMetric::Humidity,
+            'Lluvia', 'Rain', 'Precipitación', 'Precipitation' => WeatherMetric::Precipitation,
+            'Viento', 'Wind' => WeatherMetric::WindSpeed,
             default => WeatherMetric::Temperature,
         };
     }
 
     private function operator(): ThresholdOperator
     {
-        return in_array($this->operatorChoice, ['Menos de', 'Menor que'], true)
+        return in_array($this->operatorChoice, [
+            __('weather.alerts.comparison_below'),
+            'Menos de',
+            'Below',
+            'Menor que',
+        ], true)
             ? ThresholdOperator::Below
             : ThresholdOperator::Above;
     }
 
     private function metricLabel(WeatherMetric $metric): string
     {
-        return match ($metric) {
-            WeatherMetric::Temperature => 'Temperatura',
-            WeatherMetric::Humidity => 'Humedad',
-            WeatherMetric::Precipitation => 'Lluvia',
-            WeatherMetric::WindSpeed => 'Viento',
-        };
+        return $metric->label();
     }
 
     private function metricUnit(WeatherMetric $metric): string
@@ -519,11 +709,11 @@ class ClimateAlerts extends NativeComponent
     private function stateLabel(?AlertState $state): string
     {
         return match ($state) {
-            AlertState::Exceeded => 'Superó el valor',
-            AlertState::Normal => 'Normal',
-            AlertState::NoData => 'Sin datos',
-            AlertState::Stale => 'Datos antiguos',
-            null => 'Sin revisar',
+            AlertState::Exceeded => __('ui.alerts.state_exceeded'),
+            AlertState::Normal => __('ui.alerts.state_normal'),
+            AlertState::NoData => __('ui.alerts.state_no_data'),
+            AlertState::Stale => __('ui.alerts.state_stale'),
+            null => __('ui.alerts.state_unchecked'),
         };
     }
 }

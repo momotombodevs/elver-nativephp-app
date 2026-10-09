@@ -6,6 +6,8 @@ use Donmanueldev\NativephpCharts\NativePHPChartsServiceProvider;
 use Elver\ClimateNotifications\ClimateNotificationsServiceProvider;
 use Elver\Geolocation\ElverGeolocationServiceProvider;
 use Illuminate\Support\ServiceProvider;
+use Momotombo\NativephpAppearance\AppearanceServiceProvider;
+use Momotombo\NativephpSettings\SettingsServiceProvider;
 use Native\Mobile\Providers\BrowserServiceProvider;
 use Native\Mobile\UI\NativeUIServiceProvider;
 use S2BR\MobileSplashscreen\MobileSplashscreenServiceProvider;
@@ -46,6 +48,9 @@ class NativeServiceProvider extends ServiceProvider
             ElverGeolocationServiceProvider::class,
             ClimateNotificationsServiceProvider::class,
             MobileSplashscreenServiceProvider::class,
+            AppearanceServiceProvider::class,
+            SettingsServiceProvider::class,
+
         ];
     }
 }

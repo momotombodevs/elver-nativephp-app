@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "4e0872c23546d8fe7f057cf7a911c9fa",
+    "content-hash": "e8c8ed0fbf46f19061b3c641a4711472",
     "packages": [
         {
             "name": "bacon/bacon-qr-code",
@@ -2405,6 +2405,122 @@
                 }
             ],
             "time": "2026-03-08T20:05:35+00:00"
+        },
+        {
+            "name": "momotombo/nativephp-appearance",
+            "version": "1.1.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/momotombodevs/nativephp-appearance.git",
+                "reference": "c04f929aed32f1b312c4e1a05a72853fb3fbe696"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/momotombodevs/nativephp-appearance/zipball/c04f929aed32f1b312c4e1a05a72853fb3fbe696",
+                "reference": "c04f929aed32f1b312c4e1a05a72853fb3fbe696",
+                "shasum": ""
+            },
+            "require": {
+                "nativephp/mobile": "^4.3",
+                "php": "^8.4"
+            },
+            "require-dev": {
+                "pestphp/pest": "^3.0"
+            },
+            "type": "nativephp-plugin",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Momotombo\\NativephpAppearance\\AppearanceServiceProvider"
+                    ]
+                },
+                "nativephp": {
+                    "manifest": "nativephp.json"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Momotombo\\NativephpAppearance\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Momotombo Dev",
+                    "email": "hello@momotombo.dev"
+                }
+            ],
+            "description": "Application-local light, dark, and system appearance preference for NativePHP Mobile.",
+            "homepage": "https://github.com/momotombodevs/nativephp-appearance",
+            "keywords": [
+                "appearance",
+                "dark-mode",
+                "light-mode",
+                "nativephp",
+                "nativephp-mobile",
+                "theme"
+            ],
+            "support": {
+                "issues": "https://github.com/momotombodevs/nativephp-appearance/issues",
+                "source": "https://github.com/momotombodevs/nativephp-appearance"
+            },
+            "time": "2026-10-02T03:25:33+00:00"
+        },
+        {
+            "name": "momotombo/nativephp-settings",
+            "version": "v1.0.0",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/momotombodevs/nativephp-settings.git",
+                "reference": "eeebd86920af1d23142d1b8de9d18cb752488a29"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/momotombodevs/nativephp-settings/zipball/eeebd86920af1d23142d1b8de9d18cb752488a29",
+                "reference": "eeebd86920af1d23142d1b8de9d18cb752488a29",
+                "shasum": ""
+            },
+            "require": {
+                "nativephp/mobile": "^4.5",
+                "php": "^8.2"
+            },
+            "require-dev": {
+                "pestphp/pest": "^3.0"
+            },
+            "type": "nativephp-plugin",
+            "extra": {
+                "laravel": {
+                    "providers": [
+                        "Momotombo\\NativephpSettings\\SettingsServiceProvider"
+                    ]
+                },
+                "nativephp": {
+                    "manifest": "nativephp.json"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "Momotombo\\NativephpSettings\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Momotombo"
+                }
+            ],
+            "description": "Local typed settings for NativePHP Mobile applications.",
+            "support": {
+                "issues": "https://github.com/momotombodevs/nativephp-settings/issues",
+                "source": "https://github.com/momotombodevs/nativephp-settings/tree/v1.0.0"
+            },
+            "time": "2026-10-02T17:58:14+00:00"
         },
         {
             "name": "monolog/monolog",

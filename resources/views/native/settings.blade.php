@@ -1,38 +1,117 @@
-<native:top-bar title="Ajustes" />
+<native:top-bar title="{{ __('ui.settings.title') }}" back />
 
-<native:scroll-view ref="settings-screen" class="w-full h-full bg-theme-background">
-    <native:column class="w-full p-4 gap-5">
-        <native:column class="w-full rounded-lg bg-theme-surface p-4 gap-3">
-            <native:text class="text-base font-bold text-theme-on-surface">Tu clima</native:text>
-            @if ($this->locationOptions === [])
-                <native:text class="text-sm text-theme-on-surface-variant">Agrega una ubicación para elegir la principal.</native:text>
-                <native:button variant="secondary" @navigate="'/locations'">Agregar ubicación</native:button>
-            @else
-                <native:select ref="settings-default-location" label="Ubicación principal" :options="$this->locationOptions" native:model="defaultLocationChoice" />
-            @endif
-            <native:select ref="settings-units" label="Unidades" :options="['Métrico', 'Imperial']" native:model="unitsChoice" />
-        </native:column>
+<native:list ref="settings-screen" class="w-full h-full bg-theme-background" plain separator>
+    <native:list-section header="{{ __('ui.settings.appearance') }}" footer="{{ __('ui.settings.system_description') }}">
+        <native:list-item
+            ref="settings-appearance"
+            headline="{{ __('ui.settings.theme') }}"
+            supporting="{{ $appearanceMode }}"
+            leadingIcon="palette"
+            :trailing-menu="$this->appearanceMenu()"
+            trailing-a11y-label="{{ __('ui.settings.theme') }}"
+            :a11y-label="__('ui.settings.theme') . ': ' . $appearanceMode"
+        />
+    </native:list-section>
 
-        <native:column class="w-full rounded-lg bg-theme-surface p-4 gap-3">
-            <native:text class="text-base font-bold text-theme-on-surface">Alertas</native:text>
-            <native:toggle ref="settings-notifications" label="Permitir alertas locales" native:model="notificationsEnabled" />
-            @if ($notificationPermissionGranted === true)
-                <native:text class="text-sm text-theme-accent">Los avisos del sistema están activados.</native:text>
-            @elseif ($notificationPermissionGranted === false)
-                <native:text class="text-sm text-theme-on-surface-variant">Activa las notificaciones del sistema para recibir tus alertas configuradas.</native:text>
-                <native:row class="w-full gap-2">
-                    <native:button class="flex-1" variant="secondary" @tap="requestNotificationPermission">Activar</native:button>
-                    <native:button class="flex-1" variant="secondary" @tap="openNotificationSettings">Ajustes</native:button>
-                </native:row>
-            @else
-                <native:row class="items-center gap-2"><native:activity-indicator /><native:text class="text-sm text-theme-on-surface-variant">Revisando permisos…</native:text></native:row>
-            @endif
-        </native:column>
+    <native:list-section header="{{ __('ui.settings.language') }}">
+        <native:list-item
+            ref="settings-locale"
+            headline="{{ __('ui.settings.app_language') }}"
+            supporting="{{ $localeChoice }}"
+            leadingIcon="translate"
+            :trailing-menu="$this->localeMenu()"
+            trailing-a11y-label="{{ __('ui.settings.app_language') }}"
+            :a11y-label="__('ui.settings.app_language') . ': ' . $localeChoice"
+        />
+    </native:list-section>
 
-        <native:column class="w-full rounded-lg bg-theme-surface p-4 gap-2">
-            <native:text class="text-base font-bold text-theme-on-surface">Datos</native:text>
-            <native:text class="text-sm text-theme-on-surface-variant">Fuente meteorológica: Open-Meteo</native:text>
-            <native:text class="text-sm text-theme-on-surface-variant">Elver {{ $this->appVersion }}</native:text>
-        </native:column>
-    </native:column>
-</native:scroll-view>
+    <native:list-section header="{{ __('ui.settings.weather') }}">
+        @if ($this->locationOptions === [])
+            <native:list-item
+                ref="settings-default-location"
+                headline="{{ __('ui.settings.primary_location') }}"
+                supporting="{{ __('ui.settings.choose_primary_location') }}"
+                leadingIcon="location_on"
+                trailingIcon="forward"
+                @navigate="'/locations/add'"
+            />
+        @else
+            <native:list-item
+                ref="settings-default-location"
+                headline="{{ __('ui.settings.primary_location') }}"
+                supporting="{{ $defaultLocationChoice }}"
+                leadingIcon="location_on"
+                :trailing-menu="$this->locationMenu()"
+                trailing-a11y-label="{{ __('ui.settings.primary_location') }}"
+                :a11y-label="__('ui.settings.primary_location') . ': ' . $defaultLocationChoice"
+            />
+        @endif
+        <native:list-item
+            ref="settings-units"
+            headline="{{ __('ui.settings.units') }}"
+            supporting="{{ $unitsChoice }}"
+            leadingIcon="device_thermostat"
+            :trailing-menu="$this->unitsMenu()"
+            trailing-a11y-label="{{ __('ui.settings.units') }}"
+            :a11y-label="__('ui.settings.units') . ': ' . $unitsChoice"
+        />
+    </native:list-section>
+
+    <native:list-section header="{{ __('ui.settings.alerts') }}">
+        <native:list-item
+            ref="settings-manage-alerts"
+            headline="{{ __('ui.settings.manage_alerts') }}"
+            supporting="{{ __('ui.settings.notification_note') }}"
+            leadingIcon="notifications"
+            trailingIcon="forward"
+            @navigate="'/alerts'"
+        />
+        <native:row ref="settings-notifications" class="w-full items-center justify-between gap-4 px-4 py-3">
+            <native:text class="flex-1 text-base text-theme-on-surface">{{ __('ui.settings.local_notifications') }}</native:text>
+            <native:toggle native:model="notificationsEnabled" :a11y-label="__('ui.settings.local_notifications')" />
+        </native:row>
+        <native:row ref="settings-critical" class="w-full items-center justify-between gap-4 px-4 py-3">
+            <native:text class="flex-1 text-base text-theme-on-surface">{{ __('ui.settings.important_alerts') }}</native:text>
+            <native:toggle native:model="notificationCritical" :a11y-label="__('ui.settings.important_alerts')" />
+        </native:row>
+        <native:row ref="settings-recommendations" class="w-full items-center justify-between gap-4 px-4 py-3">
+            <native:text class="flex-1 text-base text-theme-on-surface">{{ __('ui.settings.useful_recommendations') }}</native:text>
+            <native:toggle native:model="notificationRecommendations" :a11y-label="__('ui.settings.useful_recommendations')" />
+        </native:row>
+        <native:row ref="settings-rapid-changes" class="w-full items-center justify-between gap-4 px-4 py-3">
+            <native:text class="flex-1 text-base text-theme-on-surface">{{ __('ui.settings.rapid_changes') }}</native:text>
+            <native:toggle native:model="notificationRapidChanges" :a11y-label="__('ui.settings.rapid_changes')" />
+        </native:row>
+        <native:row ref="settings-daily-summary" class="w-full items-center justify-between gap-4 px-4 py-3">
+            <native:text class="flex-1 text-base text-theme-on-surface">{{ __('ui.settings.daily_summary') }}</native:text>
+            <native:toggle native:model="notificationDailySummary" :a11y-label="__('ui.settings.daily_summary')" />
+        </native:row>
+
+        @if ($notificationPermissionGranted === true)
+            <native:list-item
+                ref="settings-notification-status"
+                headline="{{ __('ui.settings.system_notifications_active') }}"
+                leadingIcon="check_circle"
+            />
+        @elseif ($notificationPermissionGranted === false)
+            <native:list-item
+                ref="settings-notification-permission"
+                headline="{{ __('ui.settings.enable_configured_notifications') }}"
+                supporting="{{ __('ui.common.app_settings') }}"
+                leadingIcon="notifications_off"
+                trailingIcon="forward"
+                @tap="openNotificationSettings"
+            />
+        @else
+            <native:column
+                ref="settings-notification-checking"
+                class="w-full items-center justify-center py-4"
+            >
+                <native:activity-indicator
+                    ref="settings-notification-checking-indicator"
+                    a11y-label="{{ __('ui.common.checking_permissions') }}"
+                />
+            </native:column>
+        @endif
+    </native:list-section>
+</native:list>
