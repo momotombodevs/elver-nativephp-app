@@ -29,8 +29,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
-import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlin.math.abs
 
 object ClimateNotificationFunctions {
     private const val PERMISSION_EVENT = "App\\Events\\ClimateNotificationPermissionResult"
@@ -144,12 +144,15 @@ class NotificationPermissionCoordinator : Fragment() {
             PackageManager.PERMISSION_GRANTED
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelEnabled = Build.VERSION.SDK_INT < 26 || manager
-            .getNotificationChannel("climate_alerts")
+            .getNotificationChannel("climate_alerts_critical")
             ?.importance != NotificationManager.IMPORTANCE_NONE
 
         return runtimePermissionGranted && channelEnabled && NotificationManagerCompat.from(context).areNotificationsEnabled()
     }
 }
+
+private const val CRITICAL_CHANNEL_ID = "climate_alerts_critical"
+private const val RECOMMENDATION_CHANNEL_ID = "climate_recommendations"
 
 private object ClimateAlertSchedule {
     private const val PREFERENCES = "elver_climate_notifications"
@@ -158,8 +161,8 @@ private object ClimateAlertSchedule {
     private const val ALERT_STATES_KEY = "alert_states"
     private const val WORK_NAME = "elver-climate-alert-refresh"
     private const val LEGACY_WORK_NAME = "agroclima-climate-alert-refresh"
-    private const val CHANNEL_ID = "climate_alerts"
-    private const val CHANNEL_NAME = "Alertas climáticas"
+    private const val CRITICAL_CHANNEL_NAME = "Alertas importantes"
+    private const val RECOMMENDATION_CHANNEL_NAME = "Recomendaciones del clima"
     private const val REFRESH_INTERVAL_HOURS = 1L
 
     fun sync(context: Context, scheduleJson: String) {
@@ -174,7 +177,7 @@ private object ClimateAlertSchedule {
             .putString(ALERT_STATES_KEY, states.toString())
             .apply()
 
-        if (alerts.length() == 0 || !notificationsAllowed(context)) {
+        if (locations.length() == 0 || !notificationsAllowed(context)) {
             WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
             WorkManager.getInstance(context).cancelUniqueWork(LEGACY_WORK_NAME)
             return
@@ -241,6 +244,14 @@ private object ClimateAlertSchedule {
     private fun filterStates(context: Context, states: JSONObject): JSONObject {
         val alerts = flattenAlerts(schedule(context)?.optJSONArray("locations") ?: JSONArray())
         val activeStates = JSONObject()
+
+        val keys = states.keys()
+        while (keys.hasNext()) {
+            val key = keys.next()
+            if (key.startsWith("recommendation:")) {
+                activeStates.put(key, states.optJSONObject(key))
+            }
+        }
 
         for (index in 0 until alerts.length()) {
             val alert = alerts.optJSONObject(index) ?: continue
@@ -325,7 +336,7 @@ private object ClimateAlertSchedule {
             PackageManager.PERMISSION_GRANTED
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelEnabled = Build.VERSION.SDK_INT < 26 || manager
-            .getNotificationChannel(CHANNEL_ID)
+            .getNotificationChannel(CRITICAL_CHANNEL_ID)
             ?.importance != NotificationManager.IMPORTANCE_NONE
 
         return permissionGranted && channelEnabled && NotificationManagerCompat.from(context).areNotificationsEnabled()
@@ -338,7 +349,10 @@ private object ClimateAlertSchedule {
 
         val manager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         manager.createNotificationChannel(
-            NotificationChannel(CHANNEL_ID, CHANNEL_NAME, NotificationManager.IMPORTANCE_DEFAULT),
+            NotificationChannel(CRITICAL_CHANNEL_ID, CRITICAL_CHANNEL_NAME, NotificationManager.IMPORTANCE_HIGH),
+        )
+        manager.createNotificationChannel(
+            NotificationChannel(RECOMMENDATION_CHANNEL_ID, RECOMMENDATION_CHANNEL_NAME, NotificationManager.IMPORTANCE_DEFAULT),
         )
     }
 }
@@ -348,15 +362,19 @@ class ClimateAlertWorker(
     parameters: WorkerParameters,
 ) : Worker(context, parameters) {
     override fun doWork(): Result {
-        if (!ClimateAlertSchedule.notificationAllowed(applicationContext)) {
+        val schedule = ClimateAlertSchedule.schedule(applicationContext) ?: return Result.success()
+        val preferences = schedule.optJSONObject("notifications") ?: JSONObject()
+
+        if (!ClimateAlertSchedule.notificationAllowed(applicationContext)
+            || !preferences.optBoolean("enabled", true)) {
             ClimateAlertSchedule.cancel(applicationContext)
             return Result.success()
         }
 
-        val schedule = ClimateAlertSchedule.schedule(applicationContext) ?: return Result.success()
         val locations = schedule.optJSONArray("locations") ?: return Result.success()
         val forecastUrl = secureForecastUrl(schedule.optString("forecastUrl")) ?: return Result.failure()
         val states = ClimateAlertSchedule.alertStates(applicationContext)
+        val recommendationRules = schedule.optJSONArray("recommendationRules") ?: JSONArray()
         var hadRequestFailure = false
 
         for (index in 0 until locations.length()) {
@@ -365,18 +383,20 @@ class ClimateAlertWorker(
             }
 
             val location = locations.optJSONObject(index) ?: continue
-            val current = fetchCurrentWeather(
+            val forecast = fetchForecast(
                 forecastUrl,
                 location.optDouble("latitude", Double.NaN),
                 location.optDouble("longitude", Double.NaN),
             )
 
-            if (current == null) {
+            if (forecast == null) {
                 hadRequestFailure = true
                 continue
             }
 
-            val alerts = location.optJSONArray("alerts") ?: continue
+            val current = currentValues(forecast)
+
+            val alerts = location.optJSONArray("alerts") ?: JSONArray()
             val now = System.currentTimeMillis()
 
             for (alertIndex in 0 until alerts.length()) {
@@ -398,8 +418,17 @@ class ClimateAlertWorker(
                 }
 
                 if (state == "exceeded" && previousState != "exceeded" &&
-                    ClimateAlertSchedule.isActive(applicationContext, id, signature)) {
-                    showNotification(applicationContext, location.optString("name"), alert)
+                    preferences.optBoolean("critical", true)
+                    && ClimateAlertSchedule.isActive(applicationContext, id, signature)) {
+                    showNotification(
+                        context = applicationContext,
+                        locationName = location.optString("name"),
+                        alert = alert,
+                        channelId = CRITICAL_CHANNEL_ID,
+                        title = alert.optString("notificationTitle").ifBlank { "Elver alert" },
+                        message = alert.optString("notificationMessage").ifBlank { "A configured climate threshold was exceeded." },
+                        notificationId = id.hashCode(),
+                    )
                 }
 
                 states.put(
@@ -410,6 +439,18 @@ class ClimateAlertWorker(
                         .put("evaluatedAt", now),
                 )
             }
+
+            if (preferences.optBoolean("recommendations", true)
+                || preferences.optBoolean("rapidChanges", true)) {
+                evaluateRecommendations(
+                    forecast = forecast,
+                    location = location,
+                    rules = recommendationRules,
+                    states = states,
+                    allowRecommendations = preferences.optBoolean("recommendations", true),
+                    allowRapidChanges = preferences.optBoolean("rapidChanges", true),
+                )
+            }
         }
 
         ClimateAlertSchedule.saveAlertStates(applicationContext, states)
@@ -417,7 +458,7 @@ class ClimateAlertWorker(
         return if (hadRequestFailure) Result.retry() else Result.success()
     }
 
-    private fun fetchCurrentWeather(endpoint: String, latitude: Double, longitude: Double): Map<String, Double?>? {
+    private fun fetchForecast(endpoint: String, latitude: Double, longitude: Double): JSONObject? {
         if (!latitude.isFinite() || !longitude.isFinite() || latitude !in -90.0..90.0 || longitude !in -180.0..180.0) {
             return null
         }
@@ -426,6 +467,8 @@ class ClimateAlertWorker(
             .appendQueryParameter("latitude", latitude.toString())
             .appendQueryParameter("longitude", longitude.toString())
             .appendQueryParameter("current", METRICS.joinToString(","))
+            .appendQueryParameter("hourly", "temperature_2m,precipitation")
+            .appendQueryParameter("forecast_hours", "8")
             .appendQueryParameter("timezone", "auto")
             .appendQueryParameter("timeformat", "unixtime")
             .build()
@@ -440,19 +483,118 @@ class ClimateAlertWorker(
                 return null
             }
 
-            val current = connection.inputStream.bufferedReader().use { reader ->
-                JSONObject(reader.readText()).optJSONObject("current")
-            } ?: return null
-
-            METRICS.associateWith { metric ->
-                val value = current.optDouble(metric, Double.NaN)
-                value.takeIf { it.isFinite() }
-            }
+            connection.inputStream.bufferedReader().use { reader -> JSONObject(reader.readText()) }
         } catch (_: Exception) {
             null
         } finally {
             connection.disconnect()
         }
+    }
+
+    private fun currentValues(forecast: JSONObject): Map<String, Double?> {
+        val current = forecast.optJSONObject("current") ?: return emptyMap()
+
+        return METRICS.associateWith { metric ->
+            val value = current.optDouble(metric, Double.NaN)
+            value.takeIf { it.isFinite() }
+        }
+    }
+
+    private fun evaluateRecommendations(
+        forecast: JSONObject,
+        location: JSONObject,
+        rules: JSONArray,
+        states: JSONObject,
+        allowRecommendations: Boolean,
+        allowRapidChanges: Boolean,
+    ) {
+        val current = currentValues(forecast)
+        val hourly = forecast.optJSONObject("hourly")
+        val locationId = location.optString("id")
+        val locationName = location.optString("name")
+
+        for (index in 0 until rules.length()) {
+            val rule = rules.optJSONObject(index) ?: continue
+            val code = rule.optString("code")
+            val rapidChange = code == "rapid_temperature_change"
+            if (rapidChange && !allowRapidChanges || !rapidChange && !allowRecommendations) {
+                continue
+            }
+
+            val active = recommendationActive(code, rule, current, hourly)
+            val stateKey = "recommendation:$locationId:$code"
+            val signature = rule.toString()
+            val saved = states.optJSONObject(stateKey)
+            val previousState = saved
+                ?.takeIf { it.optString("signature") == signature }
+                ?.optString("state")
+                .takeUnless { it == "null" }
+
+            if (active && previousState != "active") {
+                showNotification(
+                    context = applicationContext,
+                    locationName = locationName,
+                    alert = rule,
+                    channelId = RECOMMENDATION_CHANNEL_ID,
+                    title = rule.optString("title"),
+                    message = rule.optString("message").replace("{location}", locationName),
+                    notificationId = stateKey.hashCode(),
+                )
+            }
+
+            states.put(
+                stateKey,
+                JSONObject()
+                    .put("signature", signature)
+                    .put("state", if (active) "active" else "normal")
+                    .put("evaluatedAt", System.currentTimeMillis()),
+            )
+        }
+    }
+
+    private fun recommendationActive(
+        code: String,
+        rule: JSONObject,
+        current: Map<String, Double?>,
+        hourly: JSONObject?,
+    ): Boolean {
+        return when (code) {
+            "heat_humidity" -> {
+                val temperature = current["temperature_2m"]
+                val humidity = current["relative_humidity_2m"]
+                val apparent = current["apparent_temperature"]
+                (temperature != null && humidity != null
+                    && temperature >= rule.optDouble("temperature", 32.0)
+                    && humidity >= rule.optDouble("humidity", 70.0))
+                    || (apparent != null && apparent >= rule.optDouble("apparent_temperature", 36.0))
+            }
+            "uv_high" -> (current["uv_index"] ?: 0.0) >= rule.optDouble("uv", 6.0)
+            "strong_wind" -> (current["wind_speed_10m"] ?: 0.0) >= rule.optDouble("wind", 35.0)
+            "rain_soon" -> hourlyHasRain(hourly, rule.optDouble("precipitation", 0.5))
+            "rapid_temperature_change" -> rapidTemperatureChange(hourly, rule.optDouble("change", 6.0))
+            else -> false
+        }
+    }
+
+    private fun hourlyHasRain(hourly: JSONObject?, threshold: Double): Boolean {
+        val values = hourly?.optJSONArray("precipitation") ?: return false
+
+        for (index in 0 until minOf(values.length(), 3)) {
+            if (values.optDouble(index, 0.0) >= threshold) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    private fun rapidTemperatureChange(hourly: JSONObject?, threshold: Double): Boolean {
+        val values = hourly?.optJSONArray("temperature_2m") ?: return false
+        if (values.length() < 2) {
+            return false
+        }
+
+        return abs(values.optDouble(values.length() - 1) - values.optDouble(0)) >= threshold
     }
 
     private fun alertState(value: Double?, operator: String, threshold: Double): String {
@@ -469,13 +611,22 @@ class ClimateAlertWorker(
         return if (exceeded) "exceeded" else "normal"
     }
 
-    private fun showNotification(context: Context, locationName: String, alert: JSONObject) {
+    private fun showNotification(
+        context: Context,
+        locationName: String,
+        alert: JSONObject,
+        channelId: String,
+        title: String,
+        message: String,
+        notificationId: Int,
+    ) {
         if (!ClimateAlertSchedule.notificationAllowed(context)) {
             return
         }
 
         val locationIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
             ?.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            ?.takeIf { alert.optString("id").isNotBlank() }
             ?.putExtra("notification_url", notificationRoute(alert))
         val contentIntent = locationIntent?.let {
             PendingIntent.getActivity(
@@ -485,28 +636,22 @@ class ClimateAlertWorker(
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
         }
-        val operator = if (alert.optString("operator") == "above") "superó" else "bajó de"
-        val threshold = alert.optString("displayThreshold").ifBlank {
-            String.format(Locale.forLanguageTag("es-NI"), "%.1f", alert.optDouble("threshold"))
-        }
-        val unit = alert.optString("displayUnit").ifBlank { alert.optString("unit") }
-        val message = "${alert.optString("label")} $operator $threshold $unit en $locationName."
         val notificationIcon = context.resources.getIdentifier(
             "ic_climate_alert",
             "drawable",
             context.packageName,
         )
-        val notification = NotificationCompat.Builder(context, "climate_alerts")
+        val notification = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(notificationIcon.takeIf { it != 0 } ?: android.R.drawable.ic_dialog_info)
-            .setContentTitle("Alerta de Elver")
+            .setContentTitle(title)
             .setContentText(message)
             .setStyle(NotificationCompat.BigTextStyle().bigText(message))
             .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(if (channelId == CRITICAL_CHANNEL_ID) NotificationCompat.PRIORITY_HIGH else NotificationCompat.PRIORITY_DEFAULT)
 
         contentIntent?.let(notification::setContentIntent)
         try {
-            NotificationManagerCompat.from(context).notify(alert.optString("id").hashCode(), notification.build())
+            NotificationManagerCompat.from(context).notify(notificationId, notification.build())
         } catch (_: SecurityException) {
             // The user can revoke permission between the check and notification delivery.
         }
@@ -528,6 +673,8 @@ class ClimateAlertWorker(
             "relative_humidity_2m",
             "precipitation",
             "wind_speed_10m",
+            "apparent_temperature",
+            "uv_index",
         )
     }
 }
