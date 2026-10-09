@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://momotombodevs.github.io/elver-nativephp-app/sitemap.xml

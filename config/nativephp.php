@@ -41,6 +41,8 @@ return [
 
     'app_id' => env('NATIVEPHP_APP_ID'),
 
+    'supported_locales' => ['es-NI', 'en'],
+
     /*
     |--------------------------------------------------------------------------
     | Deeplink Scheme
@@ -136,6 +138,12 @@ return [
     */
 
     'permission_localizations' => [
+        'es-NI' => [
+            'NSLocationWhenInUseUsageDescription' => 'Elver usa tu ubicación al guardar un lugar y mostrar su clima.',
+        ],
+        'en' => [
+            'NSLocationWhenInUseUsageDescription' => 'Elver uses your location to save a place and show its weather.',
+        ],
         // 'nl' => [
         //     'NSCameraUsageDescription' => 'Gebruikt om een profielfoto te maken.',
         //     'NSMicrophoneUsageDescription' => 'Gebruikt om audio op te nemen bij je video\'s.',
@@ -303,7 +311,7 @@ return [
         | switch automatically when the device is in dark mode.
         |
         | Values must be hex strings: #RRGGBB or #AARRGGBB. Wrap them in quotes
-        | inside your .env file (e.g. NATIVEPHP_ANDROID_COLOR_PRIMARY="#2563EB")
+        | inside your .env file (e.g. NATIVEPHP_ANDROID_COLOR_PRIMARY="#7F00FF")
         | because '#' starts a comment in .env.
         |
         | Both values/themes.xml and values-night/themes.xml are written from
@@ -311,8 +319,8 @@ return [
         |
         */
         'theme' => [
-            'color_primary' => env('NATIVEPHP_ANDROID_COLOR_PRIMARY', '#2563EB'),
-            'color_primary_night' => env('NATIVEPHP_ANDROID_COLOR_PRIMARY_NIGHT', '#2563EB'),
+            'color_primary' => env('NATIVEPHP_ANDROID_COLOR_PRIMARY', '#7F00FF'),
+            'color_primary_night' => env('NATIVEPHP_ANDROID_COLOR_PRIMARY_NIGHT', '#7F00FF'),
             'color_on_primary' => env('NATIVEPHP_ANDROID_COLOR_ON_PRIMARY', '#FFFFFF'),
         ],
 

@@ -2,19 +2,30 @@
 
 namespace App\NativeComponents;
 
-use App\Domain\AgroClima\Data\ForecastResult;
-use App\Domain\AgroClima\Data\WeatherData;
-use App\Domain\AgroClima\Enums\WeatherMetric;
+use App\Domain\Weather\Data\ForecastResult;
+use App\Domain\Weather\Data\WeatherData;
+use App\Domain\Weather\Enums\RecommendationPriority;
+use App\Domain\Weather\Enums\WeatherMetric;
+use App\Models\AppSetting;
 use App\Models\Location;
-use App\Services\AgroClima\AlertEvaluator;
-use App\Services\AgroClima\BackgroundAlertSchedule;
-use App\Services\AgroClima\ChartAxisFactory;
-use App\Services\AgroClima\ChartSeriesFactory;
-use App\Services\AgroClima\ForecastRefreshQueue;
-use App\Services\AgroClima\ForecastService;
+use App\Services\Localization\LocalePreferences;
+use App\Services\Weather\AlertEvaluator;
+use App\Services\Weather\BackgroundAlertSchedule;
+use App\Services\Weather\ChartAxisFactory;
+use App\Services\Weather\ChartSeriesFactory;
+use App\Services\Weather\ForecastRefreshQueue;
+use App\Services\Weather\ForecastService;
+use App\Services\Weather\RainSummaryFactory;
+use App\Services\Weather\UnitPreferences;
+use App\Services\Weather\WeatherRecommendationService;
+use Carbon\CarbonImmutable;
 use Illuminate\View\View;
 use Native\Mobile\Attributes\Computed;
 use Native\Mobile\Attributes\Lazy;
+use Native\Mobile\Attributes\Poll;
+use Native\Mobile\Edge\Layouts\Builders\NavAction;
+use Native\Mobile\Edge\Layouts\Builders\NavBarOptions;
+use Native\Mobile\Edge\Layouts\Builders\TabBarOptions;
 use Native\Mobile\Edge\NativeComponent;
 use Throwable;
 
@@ -22,6 +33,8 @@ use Throwable;
 class Home extends NativeComponent
 {
     public ?string $locationId = null;
+
+    public string $locationChoice = '';
 
     /** @var array<string, mixed> */
     public array $forecast = [];
@@ -34,21 +47,38 @@ class Home extends NativeComponent
 
     public ?string $fetchedAt = null;
 
+    public string $provider = 'open-meteo';
+
     public ?string $pendingForecastRefreshId = null;
 
     public ?string $pendingForecastLocationId = null;
 
+    public bool $showMetricHelp = false;
+
     public function mount(): void
     {
+        app(LocalePreferences::class)->apply();
+        $this->applyAppearance();
+
+        if ($this->shouldShowOnboarding()) {
+            $this->replace('/onboarding');
+
+            return;
+        }
+
         $this->loadDefaultLocation();
     }
 
     public function onResume(): void
     {
-        $default = $this->defaultLocation();
+        app(LocalePreferences::class)->apply();
+        $this->applyAppearance();
+
+        $default = $this->location() ?? $this->defaultLocation();
 
         if ($default?->id !== $this->locationId) {
             $this->locationId = $default?->id;
+            $this->locationChoice = $default === null ? '' : $this->locationLabel($default);
             $this->forecast = [];
             $this->stale = false;
             $this->fetchedAt = null;
@@ -57,12 +87,117 @@ class Home extends NativeComponent
             $this->loading = false;
         }
 
+        $this->refreshForecastIfNeeded();
+    }
+
+    public function updatedLocationChoice(string $choice): void
+    {
+        $location = Location::query()->find($this->locationChoiceMap()[$choice] ?? null);
+
+        if ($location === null || $location->id === $this->locationId) {
+            return;
+        }
+
+        $this->locationId = $location->id;
+        $this->forecast = [];
+        $this->stale = false;
+        $this->fetchedAt = null;
+        $this->clearPendingForecastRefresh();
+        $this->loading = false;
         $this->loadForecast();
+    }
+
+    public function chooseLocation(string $locationId): void
+    {
+        $choice = array_search($locationId, $this->locationChoiceMap(), true);
+
+        if (! is_string($choice)) {
+            return;
+        }
+
+        $this->locationChoice = $choice;
+        $this->updatedLocationChoice($choice);
+    }
+
+    /** @return list<NavAction> */
+    public function locationMenu(): array
+    {
+        return collect($this->locationChoiceMap())
+            ->map(fn (string $locationId, string $label): NavAction => NavAction::make('summary-location-'.$locationId)
+                ->label($label)
+                ->press("chooseLocation('{$locationId}')"))
+            ->values()
+            ->all();
     }
 
     public function refreshForecast(): void
     {
         $this->loadForecast(force: true);
+    }
+
+    public function navTitle(): string
+    {
+        return __('ui.home.title');
+    }
+
+    public function navigationOptions(): ?NavBarOptions
+    {
+        $options = NavBarOptions::make();
+
+        if ($this->fetchedAt !== null) {
+            $options->subtitle(__('ui.home.updated', ['time' => $this->fetchedAt]));
+        }
+
+        return $this->fetchedAt !== null ? $options : null;
+    }
+
+    public function openMetricHelp(): void
+    {
+        $this->showMetricHelp = true;
+    }
+
+    public function dismissMetricHelp(): void
+    {
+        $this->showMetricHelp = false;
+    }
+
+    #[Poll(300_000)]
+    public function refreshForecastIfNeeded(): void
+    {
+        if ($this->loading) {
+            return;
+        }
+
+        $location = $this->location();
+
+        if ($location === null) {
+            return;
+        }
+
+        $cached = app(ForecastService::class)->cachedForLocation($location);
+
+        if ($cached === null || $cached->stale || $cached->data->toArray() !== $this->forecast) {
+            $this->loadForecast();
+        }
+    }
+
+    public function startAddingLocation(): void
+    {
+        $this->markOnboardingAsSeen();
+        $this->replace('/locations');
+    }
+
+    public function skipOnboarding(): void
+    {
+        $this->markOnboardingAsSeen();
+        $this->replace('/');
+    }
+
+    public function tabBarOptions(): ?TabBarOptions
+    {
+        return AppSetting::query()->whereKey('onboarding_seen')->value('value') === '1'
+            ? null
+            : TabBarOptions::make()->hidden();
     }
 
     /** @return list<array{label: string, value: string, unit: string}> */
@@ -78,10 +213,11 @@ class Home extends NativeComponent
         return collect(WeatherMetric::cases())
             ->map(function (WeatherMetric $metric) use ($data): array {
                 $value = $data->currentValue($metric);
+                $displayValue = $value === null ? null : app(UnitPreferences::class)->fromBase($metric, $value);
 
                 return [
                     'label' => $this->metricLabel($metric),
-                    'value' => $value === null ? '—' : number_format($value, $metric === WeatherMetric::Precipitation ? 1 : 0, ',', '.'),
+                    'value' => $displayValue === null ? '—' : number_format($displayValue, $metric === WeatherMetric::Precipitation ? 1 : 0, ',', '.'),
                     'unit' => $this->metricUnit($metric),
                 ];
             })
@@ -98,37 +234,188 @@ class Home extends NativeComponent
             return [];
         }
 
-        return app(ChartSeriesFactory::class)->forMetric(
+        return app(UnitPreferences::class)->series(WeatherMetric::Temperature, app(ChartSeriesFactory::class)->forMetric(
             $location,
             WeatherData::fromArray($this->forecast),
             WeatherMetric::Temperature,
             24,
+        ));
+    }
+
+    /** @return array{total: float|null, reportedHours: int, expectedHours: int, partial: bool, noData: bool, hasRain: bool, periods: list<string>} */
+    #[Computed]
+    public function next24HoursRain(): array
+    {
+        if ($this->forecast === []) {
+            return [
+                'total' => null,
+                'reportedHours' => 0,
+                'expectedHours' => 24,
+                'partial' => true,
+                'noData' => true,
+                'hasRain' => false,
+                'periods' => [],
+            ];
+        }
+
+        $summary = app(RainSummaryFactory::class)->forNext24Hours(WeatherData::fromArray($this->forecast));
+
+        if ($summary['total'] !== null) {
+            $summary['total'] = app(UnitPreferences::class)->fromBase(WeatherMetric::Precipitation, $summary['total']);
+        }
+
+        return $summary;
+    }
+
+    /** @return list<array{label: string, value: string, unit: string}> */
+    #[Computed]
+    public function currentWeatherDetails(): array
+    {
+        $details = $this->forecast['current_details'] ?? [];
+
+        return [
+            [
+                'label' => __('ui.home.feels_like'),
+                'value' => $this->formattedMetricDetail(WeatherMetric::Temperature, $details['apparent_temperature'] ?? null),
+                'unit' => $this->metricUnit(WeatherMetric::Temperature),
+            ],
+            [
+                'label' => __('ui.home.uv_index'),
+                'value' => $this->formattedDetail($details['uv_index'] ?? null, 1),
+                'unit' => '',
+            ],
+            [
+                'label' => __('ui.home.wind'),
+                'value' => $this->windDirection($details['wind_direction_10m'] ?? null),
+                'unit' => '',
+            ],
+        ];
+    }
+
+    /** @return list<array<string, mixed>> */
+    #[Computed]
+    public function recommendations(): array
+    {
+        if ($this->forecast === []) {
+            return [];
+        }
+
+        $recommendations = array_filter(
+            app(WeatherRecommendationService::class)->recommendationsFor(
+                WeatherData::fromArray($this->forecast),
+                $this->stale,
+            ),
+            fn ($recommendation): bool => $recommendation->priority !== RecommendationPriority::Info,
         );
+
+        return array_map(
+            fn ($recommendation): array => $recommendation->toArray(),
+            array_slice(array_values($recommendations), 0, 2),
+        );
+    }
+
+    /** @return list<array{date: string, maximum: string, minimum: string, uv: string}> */
+    #[Computed]
+    public function dailyForecast(): array
+    {
+        return array_map(function (array $day): array {
+            $date = isset($day['date']) && is_string($day['date'])
+                ? CarbonImmutable::createFromFormat('!Y-m-d', $day['date'])
+                : null;
+
+            return [
+                'date' => $date?->translatedFormat('D j M') ?? '—',
+                'maximum' => $this->formattedMetricDetail(WeatherMetric::Temperature, $day['maximum_temperature'] ?? null, 0).' '.$this->metricUnit(WeatherMetric::Temperature),
+                'minimum' => $this->formattedMetricDetail(WeatherMetric::Temperature, $day['minimum_temperature'] ?? null, 0).' '.$this->metricUnit(WeatherMetric::Temperature),
+                'uv' => __('ui.home.uv_value', ['value' => $this->formattedDetail($day['maximum_uv_index'] ?? null, 1)]),
+            ];
+        }, array_slice($this->forecast['daily'] ?? [], 0, 5));
+    }
+
+    #[Computed]
+    public function providerLabel(): string
+    {
+        return match ($this->provider) {
+            'open-meteo' => 'Open-Meteo',
+            default => $this->provider,
+        };
     }
 
     /** @return array<string, bool|float|int|string> */
     #[Computed]
     public function temperatureYAxis(): array
     {
-        return app(ChartAxisFactory::class)->yAxis(WeatherMetric::Temperature, $this->temperatureSeries);
+        return app(ChartAxisFactory::class)->yAxis(
+            WeatherMetric::Temperature,
+            $this->temperatureSeries,
+            $this->metricUnit(WeatherMetric::Temperature),
+        );
     }
 
     #[Computed]
     public function locationName(): string
     {
-        return $this->location()?->name ?? 'Sin ubicación';
+        return $this->location()?->name ?? __('ui.home.no_location_fallback');
+    }
+
+    #[Computed]
+    public function chartLocale(): string
+    {
+        return app()->getLocale();
     }
 
     public function render(): View
     {
         $this->finishForecastRefresh();
 
+        if ($this->shouldShowOnboarding()) {
+            return view('native.onboarding', ['skipAction' => 'skipOnboarding']);
+        }
+
         return view('native.home');
+    }
+
+    private function markOnboardingAsSeen(): void
+    {
+        AppSetting::query()->updateOrCreate(
+            ['key' => 'onboarding_seen'],
+            ['value' => '1'],
+        );
+    }
+
+    private function shouldShowOnboarding(): bool
+    {
+        if (AppSetting::query()->whereKey('onboarding_seen')->value('value') === '1') {
+            return false;
+        }
+
+        if (! Location::query()->exists()) {
+            return true;
+        }
+
+        $this->markOnboardingAsSeen();
+
+        return false;
+    }
+
+    private function applyAppearance(): void
+    {
+        if (! function_exists('nativephp_can') || ! nativephp_can('Appearance.Set')) {
+            return;
+        }
+
+        $mode = AppSetting::query()->whereKey('appearance_mode')->value('value') ?? 'system';
+
+        nativephp_call('Appearance.Set', json_encode([
+            'mode' => in_array($mode, ['system', 'light', 'dark'], true) ? $mode : 'system',
+        ], JSON_THROW_ON_ERROR));
     }
 
     private function loadDefaultLocation(): void
     {
-        $this->locationId = $this->defaultLocation()?->id;
+        $location = $this->defaultLocation();
+        $this->locationId = $location?->id;
+        $this->locationChoice = $location === null ? '' : $this->locationLabel($location);
         $this->loadForecast();
     }
 
@@ -171,7 +458,7 @@ class Home extends NativeComponent
             }
         } catch (Throwable $exception) {
             report($exception);
-            $this->error = 'No pudimos actualizar. Revisa tu conexión.';
+            $this->error = __('ui.home.load_error');
             $this->loading = false;
             $this->clearPendingForecastRefresh();
         }
@@ -195,7 +482,7 @@ class Home extends NativeComponent
             $this->loading = true;
         } catch (Throwable $exception) {
             report($exception);
-            $this->error = 'No pudimos iniciar la actualización. Inténtalo de nuevo.';
+            $this->error = __('ui.home.start_error');
             $this->loading = false;
             $this->clearPendingForecastRefresh();
         }
@@ -226,7 +513,7 @@ class Home extends NativeComponent
         }
 
         if ($status !== 'complete') {
-            $this->error = 'No pudimos actualizar. Revisa tu conexión e inténtalo de nuevo.';
+            $this->error = __('ui.home.load_error');
             app(BackgroundAlertSchedule::class)->sync();
 
             return;
@@ -236,7 +523,7 @@ class Home extends NativeComponent
         $result = $location === null ? null : app(ForecastService::class)->cachedForLocation($location);
 
         if ($location === null || $result === null) {
-            $this->error = 'No encontramos un pronóstico guardado. Inténtalo de nuevo.';
+            $this->error = __('ui.home.missing_forecast');
             app(BackgroundAlertSchedule::class)->sync();
 
             return;
@@ -251,10 +538,14 @@ class Home extends NativeComponent
     {
         $this->forecast = $result->data->toArray();
         $this->stale = $result->stale;
+        $this->provider = $result->provider;
         $updatedAt = $result->fetchedAt->setTimezone($result->data->timezone);
         $this->fetchedAt = $updatedAt->isToday()
-            ? 'Hoy, '.$updatedAt->translatedFormat('g:i a')
-            : $updatedAt->translatedFormat('j M, g:i a');
+            ? __('ui.home.today', ['time' => $updatedAt->translatedFormat('g:i a')])
+            : __('ui.home.date_time', [
+                'date' => $updatedAt->translatedFormat('j M'),
+                'time' => $updatedAt->translatedFormat('g:i a'),
+            ]);
         app(AlertEvaluator::class)->evaluate($location, $result->data, $result->stale);
     }
 
@@ -280,21 +571,89 @@ class Home extends NativeComponent
 
     private function metricLabel(WeatherMetric $metric): string
     {
-        return match ($metric) {
-            WeatherMetric::Temperature => 'Temperatura',
-            WeatherMetric::Humidity => 'Humedad',
-            WeatherMetric::Precipitation => 'Precipitación',
-            WeatherMetric::WindSpeed => 'Viento',
-        };
+        return $metric->label();
     }
 
     private function metricUnit(WeatherMetric $metric): string
     {
-        return match ($metric) {
-            WeatherMetric::Temperature => '°C',
-            WeatherMetric::Humidity => '%',
-            WeatherMetric::Precipitation => 'mm',
-            WeatherMetric::WindSpeed => 'km/h',
-        };
+        return app(UnitPreferences::class)->unit($metric);
+    }
+
+    /** @return list<string> */
+    #[Computed]
+    public function locationOptions(): array
+    {
+        return array_keys($this->locationChoiceMap());
+    }
+
+    #[Computed]
+    public function rainUnit(): string
+    {
+        return $this->metricUnit(WeatherMetric::Precipitation);
+    }
+
+    private function formattedDetail(mixed $value, int $decimals = 0): string
+    {
+        if (! is_int($value) && ! is_float($value)) {
+            return '—';
+        }
+
+        return number_format((float) $value, $decimals, ',', '.');
+    }
+
+    private function formattedMetricDetail(WeatherMetric $metric, mixed $value, int $decimals = 0): string
+    {
+        if (! is_int($value) && ! is_float($value)) {
+            return '—';
+        }
+
+        return app(UnitPreferences::class)->format($metric, (float) $value, $decimals);
+    }
+
+    /** @return array<string, string> */
+    private function locationChoiceMap(): array
+    {
+        $locations = Location::query()
+            ->orderByDesc('is_default')
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+        $nameCounts = $locations->countBy('name');
+        $bases = $locations->map(fn (Location $location): string => $nameCounts[$location->name] === 1
+            ? $location->name
+            : sprintf('%s · %.4f, %.4f', $location->name, $location->latitude, $location->longitude));
+        $baseCounts = $bases->countBy();
+        $occurrences = [];
+        $choices = [];
+
+        foreach ($locations as $index => $location) {
+            $base = $bases[$index];
+            $occurrences[$base] = ($occurrences[$base] ?? 0) + 1;
+            $label = $baseCounts[$base] === 1
+                ? $base
+                : $base.' · '.($location->is_default
+                    ? __('ui.locations.primary')
+                    : __('ui.locations.point', ['number' => $occurrences[$base]]));
+            $choices[$label] = $location->id;
+        }
+
+        return $choices;
+    }
+
+    private function locationLabel(Location $location): string
+    {
+        return array_search($location->id, $this->locationChoiceMap(), true) ?: $location->name;
+    }
+
+    private function windDirection(mixed $degrees): string
+    {
+        if (! is_int($degrees) && ! is_float($degrees)) {
+            return '—';
+        }
+
+        $directions = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'];
+        $index = (int) round((((float) $degrees) % 360) / 45) % count($directions);
+
+        return $directions[$index];
     }
 }

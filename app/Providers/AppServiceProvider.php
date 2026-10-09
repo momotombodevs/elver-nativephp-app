@@ -2,8 +2,8 @@
 
 namespace App\Providers;
 
-use App\Domain\AgroClima\Contracts\WeatherProvider;
-use App\Services\AgroClima\OpenMeteoWeatherProvider;
+use App\Domain\Weather\Contracts\WeatherProvider;
+use App\Services\Weather\OpenMeteoWeatherProvider;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;

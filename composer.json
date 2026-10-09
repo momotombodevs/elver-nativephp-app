@@ -13,14 +13,14 @@
     "repositories": [
         {
             "type": "path",
-            "url": "packages/agroclima/geolocation",
+            "url": "packages/elver/geolocation",
             "options": {
                 "symlink": true
             }
         },
         {
             "type": "path",
-            "url": "packages/agroclima/climate-notifications",
+            "url": "packages/elver/climate-notifications",
             "options": {
                 "symlink": true
             }
@@ -33,14 +33,17 @@
     ],
     "require": {
         "php": "^8.4",
-        "agroclima/climate-notifications": "^1.0",
-        "agroclima/geolocation": "^1.0",
         "donmanueldev/nativephp-charts": "^1.2",
+        "elver/climate-notifications": "^1.0",
+        "elver/geolocation": "^1.0",
         "laravel/framework": "^13.0",
         "laravel/tinker": "^3.0",
+        "momotombo/nativephp-appearance": "^1.1",
+        "momotombo/nativephp-settings": "^1.0",
         "nativephp/mobile": "^4.0",
         "nativephp/mobile-browser": "^1.0",
-        "nativephp/mobile-ui": "^0.3"
+        "nativephp/mobile-ui": "^0.3",
+        "s2br/nativephp-mobile-splashscreen": "^1.4"
     },
     "require-dev": {
         "fakerphp/faker": "^1.23",

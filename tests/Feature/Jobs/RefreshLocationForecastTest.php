@@ -1,15 +1,16 @@
 <?php
 
-use App\Domain\AgroClima\Contracts\WeatherProvider;
-use App\Domain\AgroClima\Data\Coordinates;
-use App\Domain\AgroClima\Data\WeatherData;
-use App\Domain\AgroClima\Data\WeatherPoint;
+use App\Domain\Weather\Contracts\WeatherProvider;
+use App\Domain\Weather\Data\Coordinates;
+use App\Domain\Weather\Data\WeatherData;
+use App\Domain\Weather\Data\WeatherPoint;
 use App\Jobs\RefreshLocationForecast;
 use App\Models\Location;
-use App\Services\AgroClima\ForecastRefreshQueue;
-use App\Services\AgroClima\ForecastService;
+use App\Services\Weather\ForecastRefreshQueue;
+use App\Services\Weather\ForecastService;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Queue;
 
 uses(LazilyRefreshDatabase::class);
@@ -90,4 +91,15 @@ it('marks a queued forecast refresh failed when no cached data is available', fu
         'location_id' => $location->id,
         'provider' => 'open-meteo',
     ]);
+});
+
+it('migrates a pending refresh status from the AgroClima cache key', function () {
+    $requestId = 'legacy-request';
+    Cache::put('agroclima:forecast-refresh:'.$requestId, 'complete', now()->addMinutes(10));
+
+    $queue = app(ForecastRefreshQueue::class);
+
+    expect($queue->status($requestId))->toBe('complete')
+        ->and(Cache::get('elver:forecast-refresh:'.$requestId))->toBe('complete')
+        ->and(Cache::get('agroclima:forecast-refresh:'.$requestId))->toBeNull();
 });

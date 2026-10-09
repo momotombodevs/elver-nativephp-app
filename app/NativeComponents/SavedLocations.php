@@ -2,14 +2,16 @@
 
 namespace App\NativeComponents;
 
-use App\Domain\AgroClima\Data\Coordinates;
+use App\Domain\Weather\Data\Coordinates;
 use App\Models\Location;
-use App\Services\AgroClima\BackgroundAlertSchedule;
+use App\Services\Localization\LocalePreferences;
+use App\Services\Weather\BackgroundAlertSchedule;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\View\View;
 use InvalidArgumentException;
 use Native\Mobile\Attributes\On;
+use Native\Mobile\Edge\Layouts\Builders\TabBarOptions;
 use Native\Mobile\Edge\NativeComponent;
 use Native\Mobile\Events\Alert\ButtonPressed;
 use Native\Mobile\Events\Geolocation\LocationReceived;
@@ -29,7 +31,24 @@ class SavedLocations extends NativeComponent
 
     public bool $showAddLocation = false;
 
+    public bool $fullScreenAddLocation = false;
+
     public bool $locating = false;
+
+    public function mount(): void
+    {
+        app(LocalePreferences::class)->apply();
+    }
+
+    public function navTitle(): string
+    {
+        return __('ui.locations.title');
+    }
+
+    public function tabBarOptions(): ?TabBarOptions
+    {
+        return $this->fullScreenAddLocation ? TabBarOptions::make()->hidden() : null;
+    }
 
     public string $locationPermission = 'not_determined';
 
@@ -55,6 +74,12 @@ class SavedLocations extends NativeComponent
 
     public function openAddLocation(): void
     {
+        if (! $this->fullScreenAddLocation) {
+            $this->navigate('/locations/add');
+
+            return;
+        }
+
         $this->locationListVersion++;
         $this->showAddLocation = true;
         $this->error = null;
@@ -63,12 +88,19 @@ class SavedLocations extends NativeComponent
 
     public function closeAddLocation(): void
     {
+        if ($this->fullScreenAddLocation) {
+            $this->back();
+
+            return;
+        }
+
         $this->showAddLocation = false;
         $this->error = null;
 
         if (! $this->locating) {
             $this->name = '';
         }
+
     }
 
     public function useCurrentLocation(): void
@@ -103,8 +135,8 @@ class SavedLocations extends NativeComponent
         if ($location !== 'granted') {
             $this->locating = false;
             $this->error = $location === 'permanently_denied'
-                ? 'Activa la ubicación para Elver desde Ajustes.'
-                : ($error ?: 'Elver necesita permiso para usar tu ubicación.');
+                ? __('ui.locations.location_settings_error')
+                : ($error ?: __('ui.locations.location_permission_error'));
 
             return;
         }
@@ -136,7 +168,7 @@ class SavedLocations extends NativeComponent
         $this->pendingRequestId = null;
 
         if (! $success || $latitude === null || $longitude === null) {
-            $this->error = $error ?: 'No pudimos obtener tu ubicación. Revisa el permiso.';
+            $this->error = $error ?: __('ui.locations.location_unavailable');
 
             return;
         }
@@ -144,7 +176,7 @@ class SavedLocations extends NativeComponent
         try {
             new Coordinates($latitude, $longitude);
         } catch (InvalidArgumentException) {
-            $this->error = 'La ubicación recibida tiene coordenadas inválidas. Inténtalo de nuevo.';
+            $this->error = __('ui.locations.invalid_coordinates');
 
             return;
         }
@@ -159,12 +191,12 @@ class SavedLocations extends NativeComponent
             $this->showAddLocation = false;
 
             Dialog::alert(
-                'Ubicación cercana',
-                "Ya guardaste un punto cercano como {$duplicate->name}.",
+                __('ui.locations.nearby_title'),
+                __('ui.locations.nearby_message', ['location' => $duplicate->name]),
                 [
-                    ['label' => 'Cancelar', 'style' => 'cancel'],
-                    ['label' => 'Usar existente'],
-                    ['label' => 'Actualizar ubicación'],
+                    ['label' => __('ui.common.cancel'), 'style' => 'cancel'],
+                    ['label' => __('ui.locations.use_existing')],
+                    ['label' => __('ui.locations.update_location')],
                 ],
             )->id(self::NEARBY_LOCATION_DIALOG_PREFIX.$duplicate->id)->show();
 
@@ -177,7 +209,7 @@ class SavedLocations extends NativeComponent
 
                 return Location::query()->create([
                     'id' => (string) Str::uuid(),
-                    'name' => trim($this->name) !== '' ? trim($this->name) : 'Mi ubicación',
+                    'name' => trim($this->name) !== '' ? trim($this->name) : __('ui.locations.my_location'),
                     'latitude' => $latitude,
                     'longitude' => $longitude,
                     'timezone' => 'UTC',
@@ -187,14 +219,18 @@ class SavedLocations extends NativeComponent
             });
         } catch (Throwable $exception) {
             report($exception);
-            $this->error = 'No pudimos guardar la ubicación. Inténtalo de nuevo.';
+            $this->error = __('ui.locations.save_error');
 
             return;
         }
 
         $this->name = '';
         $this->showAddLocation = false;
-        Dialog::toast("{$location->name} se guardó.", 'short');
+        Dialog::toast(__('ui.locations.location_saved', ['location' => $location->name]), 'short');
+
+        if ($this->fullScreenAddLocation) {
+            $this->back();
+        }
     }
 
     public function makeDefault(string $id): void
@@ -217,7 +253,7 @@ class SavedLocations extends NativeComponent
         }
 
         $this->error = null;
-        Dialog::toast('Ubicación principal actualizada.', 'short');
+        Dialog::toast(__('ui.locations.primary_updated'), 'short');
     }
 
     public function deleteLocation(string $id): void
@@ -231,13 +267,13 @@ class SavedLocations extends NativeComponent
         $this->pendingDeleteLocationId = $location->id;
 
         $alert = Dialog::alert(
-            'Eliminar ubicación',
+            __('ui.locations.delete_location'),
             $location->is_default
-                ? 'Esta es tu ubicación principal. Si la eliminas, otra ubicación pasará a ser principal.'
-                : "¿Quieres eliminar {$location->name}?",
+                ? __('ui.locations.default_delete_message')
+                : __('ui.locations.delete_message', ['location' => $location->name]),
             [
-                ['label' => 'Cancelar', 'style' => 'cancel'],
-                ['label' => 'Eliminar', 'style' => 'destructive'],
+                ['label' => __('ui.common.cancel'), 'style' => 'cancel'],
+                ['label' => __('ui.common.delete'), 'style' => 'destructive'],
             ],
         );
 
@@ -262,7 +298,7 @@ class SavedLocations extends NativeComponent
         $this->pendingDeleteAlertId = null;
         $this->pendingDeleteLocationId = null;
 
-        if ($index !== 1 || $label !== 'Eliminar' || $locationId === null) {
+        if ($index !== 1 || $label !== __('ui.common.delete') || $locationId === null) {
             return;
         }
 
@@ -283,7 +319,7 @@ class SavedLocations extends NativeComponent
 
         app(BackgroundAlertSchedule::class)->sync();
         $this->error = null;
-        Dialog::toast('Ubicación eliminada.', 'short');
+        Dialog::toast(__('ui.locations.deleted'), 'short');
     }
 
     private function nearbyLocationDecision(string $label, string $dialogId): void
@@ -302,19 +338,23 @@ class SavedLocations extends NativeComponent
             return;
         }
 
-        if ($label === 'Usar existente') {
+        if ($label === __('ui.locations.use_existing')) {
             DB::transaction(function () use ($location): void {
                 Location::query()->where('is_default', true)->update(['is_default' => false]);
                 $location->update(['is_default' => true]);
             });
             $this->name = '';
             $this->clearPendingNearbyLocation();
-            Dialog::toast("Usando {$location->name}.", 'short');
+            Dialog::toast(__('ui.locations.using_location', ['location' => $location->name]), 'short');
+
+            if ($this->fullScreenAddLocation) {
+                $this->back();
+            }
 
             return;
         }
 
-        if ($label === 'Actualizar ubicación'
+        if ($label === __('ui.locations.update_location')
             && $this->pendingNearbyLatitude !== null
             && $this->pendingNearbyLongitude !== null) {
             try {
@@ -333,7 +373,7 @@ class SavedLocations extends NativeComponent
                 });
             } catch (Throwable $exception) {
                 report($exception);
-                $this->error = 'No pudimos actualizar la ubicación. Inténtalo de nuevo.';
+                $this->error = __('ui.locations.update_error');
                 $this->showAddLocation = true;
                 $this->clearPendingNearbyLocation();
 
@@ -343,7 +383,11 @@ class SavedLocations extends NativeComponent
             app(BackgroundAlertSchedule::class)->sync();
             $this->name = '';
             $this->clearPendingNearbyLocation();
-            Dialog::toast('Ubicación actualizada.', 'short');
+            Dialog::toast(__('ui.locations.updated'), 'short');
+
+            if ($this->fullScreenAddLocation) {
+                $this->back();
+            }
 
             return;
         }
@@ -398,6 +442,8 @@ class SavedLocations extends NativeComponent
 
     public function render(): View
     {
+        app(LocalePreferences::class)->apply();
+
         $locations = Location::query()
             ->orderByDesc('is_default')
             ->orderBy('sort_order')
@@ -408,7 +454,7 @@ class SavedLocations extends NativeComponent
             'deleteActions' => $locations->mapWithKeys(fn (Location $location): array => [
                 $location->id => [[
                     'method' => "deleteLocation('{$location->id}')",
-                    'label' => 'Eliminar',
+                    'label' => __('ui.common.delete'),
                     'icon' => 'delete',
                     'ios' => 'trash',
                     'android' => 'delete',

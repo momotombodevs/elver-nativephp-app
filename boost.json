@@ -10,7 +10,7 @@
         "nativephp/mobile",
         "nativephp/mobile-browser",
         "donmanueldev/nativephp-charts",
-        "agroclima/geolocation",
+        "elver/geolocation",
         "nativephp/mobile-ui"
     ],
     "sail": false,

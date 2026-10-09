@@ -2,18 +2,22 @@
 
 namespace App\NativeComponents;
 
-use App\Domain\AgroClima\Data\ForecastResult;
-use App\Domain\AgroClima\Data\WeatherData;
-use App\Domain\AgroClima\Enums\WeatherMetric;
+use App\Domain\Weather\Data\ForecastResult;
+use App\Domain\Weather\Data\WeatherData;
+use App\Domain\Weather\Enums\WeatherMetric;
 use App\Models\Location;
-use App\Services\AgroClima\ChartAxisFactory;
-use App\Services\AgroClima\ChartSeriesFactory;
-use App\Services\AgroClima\ForecastRefreshQueue;
-use App\Services\AgroClima\ForecastService;
+use App\Services\Localization\LocalePreferences;
+use App\Services\Weather\ChartAxisFactory;
+use App\Services\Weather\ChartSeriesFactory;
+use App\Services\Weather\ForecastRefreshQueue;
+use App\Services\Weather\ForecastService;
+use App\Services\Weather\UnitPreferences;
 use Donmanueldev\NativephpCharts\PointSelection;
 use Illuminate\View\View;
 use Native\Mobile\Attributes\Computed;
 use Native\Mobile\Attributes\Lazy;
+use Native\Mobile\Attributes\Poll;
+use Native\Mobile\Edge\Layouts\Builders\NavAction;
 use Native\Mobile\Edge\NativeComponent;
 use Throwable;
 
@@ -26,9 +30,11 @@ class ChartExplorer extends NativeComponent
 
     public ?string $loadedLocationUpdatedAt = null;
 
-    public string $metricChoice = 'Temperatura';
+    public ?string $fetchedAtLabel = null;
 
-    public string $rangeChoice = '24 horas';
+    public string $metricChoice = '';
+
+    public string $rangeChoice = '';
 
     /** @var list<array<string, mixed>> */
     public array $series = [];
@@ -52,6 +58,10 @@ class ChartExplorer extends NativeComponent
 
     public function mount(): void
     {
+        app(LocalePreferences::class)->apply();
+        $this->metricChoice = WeatherMetric::Temperature->label();
+        $this->rangeChoice = __('ui.explorer.hours_24');
+
         $location = Location::query()->orderByDesc('is_default')->orderBy('sort_order')->first();
 
         if ($location !== null) {
@@ -64,6 +74,12 @@ class ChartExplorer extends NativeComponent
 
     public function onResume(): void
     {
+        $metric = $this->metric();
+        $isDailyRange = $this->isDailyRange();
+        app(LocalePreferences::class)->apply();
+        $this->metricChoice = $metric->label();
+        $this->rangeChoice = $isDailyRange ? __('ui.explorer.days_7') : __('ui.explorer.hours_24');
+
         $currentLocation = $this->location()
             ?? Location::query()->orderByDesc('is_default')->orderBy('sort_order')->first();
 
@@ -71,6 +87,7 @@ class ChartExplorer extends NativeComponent
             $this->locationId = null;
             $this->locationChoice = '';
             $this->loadedLocationUpdatedAt = null;
+            $this->fetchedAtLabel = null;
             $this->series = [];
             $this->forecast = [];
             $this->clearSelection();
@@ -88,11 +105,16 @@ class ChartExplorer extends NativeComponent
             $this->loadedLocationUpdatedAt = $updatedAt;
             $this->forecast = [];
             $this->series = [];
+            $this->fetchedAtLabel = null;
             $this->stale = false;
             $this->error = null;
             $this->clearSelection();
             $this->loadSeries();
+
+            return;
         }
+
+        $this->refreshForecastIfNeeded();
     }
 
     public function updatedLocationChoice(string $choice): void
@@ -101,6 +123,63 @@ class ChartExplorer extends NativeComponent
         $this->loadedLocationUpdatedAt = $this->location()?->updated_at?->toIso8601String();
         $this->clearSelection();
         $this->loadSeries();
+    }
+
+    public function chooseLocation(string $locationId): void
+    {
+        $choice = array_search($locationId, $this->locationChoiceMap(), true);
+
+        if (! is_string($choice)) {
+            return;
+        }
+
+        $this->locationChoice = $choice;
+        $this->updatedLocationChoice($choice);
+    }
+
+    public function chooseMetric(string $choice): void
+    {
+        $this->metricChoice = $choice;
+        $this->updatedMetricChoice();
+    }
+
+    public function chooseRange(string $choice): void
+    {
+        $this->rangeChoice = $choice;
+        $this->updatedRangeChoice();
+    }
+
+    /** @return list<NavAction> */
+    public function locationMenu(): array
+    {
+        return collect($this->locationChoiceMap())
+            ->map(fn (string $locationId, string $label): NavAction => NavAction::make('explorer-location-'.$locationId)
+                ->label($label)
+                ->press("chooseLocation('{$locationId}')"))
+            ->values()
+            ->all();
+    }
+
+    /** @return list<NavAction> */
+    public function metricMenu(): array
+    {
+        return collect($this->metricOptions)
+            ->map(fn (string $option, int $index): NavAction => NavAction::make('explorer-metric-'.$index)
+                ->label($option)
+                ->press("chooseMetric('".addcslashes($option, "\\'")."')"))
+            ->values()
+            ->all();
+    }
+
+    /** @return list<NavAction> */
+    public function rangeMenu(): array
+    {
+        return collect($this->rangeOptions)
+            ->map(fn (string $option, int $index): NavAction => NavAction::make('explorer-range-'.$index)
+                ->label($option)
+                ->press("chooseRange('".addcslashes($option, "\\'")."')"))
+            ->values()
+            ->all();
     }
 
     public function updatedMetricChoice(): void
@@ -118,6 +197,31 @@ class ChartExplorer extends NativeComponent
     public function refreshSeries(): void
     {
         $this->loadSeries(force: true);
+    }
+
+    public function navTitle(): string
+    {
+        return __('ui.explorer.title');
+    }
+
+    #[Poll(300_000)]
+    public function refreshForecastIfNeeded(): void
+    {
+        if ($this->loading) {
+            return;
+        }
+
+        $location = $this->location();
+
+        if ($location === null) {
+            return;
+        }
+
+        $cached = app(ForecastService::class)->cachedForLocation($location);
+
+        if ($cached === null || $cached->stale || $cached->data->toArray() !== $this->forecast) {
+            $this->loadSeries();
+        }
     }
 
     public function pointSelected(string $payload): void
@@ -138,7 +242,17 @@ class ChartExplorer extends NativeComponent
     #[Computed]
     public function metricOptions(): array
     {
-        return ['Temperatura', 'Humedad', 'Precipitación', 'Viento'];
+        return array_map(
+            fn (WeatherMetric $metric): string => $metric->label(),
+            WeatherMetric::cases(),
+        );
+    }
+
+    /** @return list<string> */
+    #[Computed]
+    public function rangeOptions(): array
+    {
+        return [__('ui.explorer.hours_24'), __('ui.explorer.days_7')];
     }
 
     #[Computed]
@@ -154,13 +268,18 @@ class ChartExplorer extends NativeComponent
     #[Computed]
     public function chartDescription(): string
     {
-        return sprintf(
-            '%s para %s durante %s, expresada en %s',
-            $this->metricChoice,
-            $this->location()?->name ?? 'la ubicación seleccionada',
-            mb_strtolower($this->rangeChoice),
-            $this->metricUnit($this->metric()),
-        );
+        return __('ui.explorer.description', [
+            'metric' => $this->metricChoice,
+            'location' => $this->location()?->name ?? __('ui.explorer.selected_location'),
+            'period' => mb_strtolower($this->rangeChoice),
+            'unit' => $this->metricUnit($this->metric()),
+        ]);
+    }
+
+    #[Computed]
+    public function chartLocale(): string
+    {
+        return app()->getLocale();
     }
 
     #[Computed]
@@ -174,8 +293,8 @@ class ChartExplorer extends NativeComponent
     public function chartXAxis(): array
     {
         return [
-            'type' => 'datetime',
-            'dateFormat' => $this->rangeChoice === '7 días' ? 'short' : 'time',
+            'type' => $this->isDailyRange() ? 'date' : 'datetime',
+            'dateFormat' => $this->isDailyRange() ? 'short' : 'time',
             'timezone' => $this->timezone,
         ];
     }
@@ -184,7 +303,7 @@ class ChartExplorer extends NativeComponent
     #[Computed]
     public function chartYAxis(): array
     {
-        return app(ChartAxisFactory::class)->yAxis($this->metric(), $this->series);
+        return app(ChartAxisFactory::class)->yAxis($this->metric(), $this->series, $this->metricUnit($this->metric()));
     }
 
     /** @return array<string, bool|string> */
@@ -203,7 +322,7 @@ class ChartExplorer extends NativeComponent
     #[Computed]
     public function chartStyle(): array
     {
-        $pointsVisible = $this->rangeChoice === '24 horas';
+        $pointsVisible = count($this->series[0]['points'] ?? []) <= 24;
 
         return match ($this->chartKind) {
             'area' => [
@@ -271,7 +390,7 @@ class ChartExplorer extends NativeComponent
             }
         } catch (Throwable $exception) {
             report($exception);
-            $this->error = 'No pudimos cargar la serie climática.';
+            $this->error = __('ui.explorer.load_error');
             $this->loading = false;
             $this->clearPendingForecastRefresh();
         }
@@ -293,7 +412,7 @@ class ChartExplorer extends NativeComponent
             $this->loading = true;
         } catch (Throwable $exception) {
             report($exception);
-            $this->error = 'No pudimos iniciar la actualización de la gráfica.';
+            $this->error = __('ui.explorer.update_error');
             $this->loading = false;
             $this->clearPendingForecastRefresh();
         }
@@ -324,7 +443,7 @@ class ChartExplorer extends NativeComponent
         }
 
         if ($status !== 'complete') {
-            $this->error = 'No pudimos cargar la serie climática. Revisa tu conexión e inténtalo de nuevo.';
+            $this->error = __('ui.explorer.connection_error');
 
             return;
         }
@@ -333,7 +452,7 @@ class ChartExplorer extends NativeComponent
         $result = $location === null ? null : app(ForecastService::class)->cachedForLocation($location);
 
         if ($location === null || $result === null) {
-            $this->error = 'No encontramos un pronóstico guardado. Inténtalo de nuevo.';
+            $this->error = __('ui.explorer.missing_forecast');
 
             return;
         }
@@ -346,6 +465,13 @@ class ChartExplorer extends NativeComponent
     {
         $this->forecast = $result->data->toArray();
         $this->stale = $result->stale;
+        $updatedAt = $result->fetchedAt->setTimezone($result->data->timezone);
+        $this->fetchedAtLabel = $updatedAt->isToday()
+            ? __('ui.home.today', ['time' => $updatedAt->translatedFormat('g:i a')])
+            : __('ui.home.date_time', [
+                'date' => $updatedAt->translatedFormat('j M'),
+                'time' => $updatedAt->translatedFormat('g:i a'),
+            ]);
         $this->loadedLocationUpdatedAt = Location::query()->find($location->id)?->updated_at?->toIso8601String();
         $this->rebuildSeries();
     }
@@ -366,12 +492,12 @@ class ChartExplorer extends NativeComponent
             return;
         }
 
-        $this->series = app(ChartSeriesFactory::class)->forMetric(
-            $location,
-            WeatherData::fromArray($this->forecast),
-            $this->metric(),
-            $this->rangeChoice === '7 días' ? 168 : 24,
-        );
+        $seriesFactory = app(ChartSeriesFactory::class);
+        $weatherData = WeatherData::fromArray($this->forecast);
+        $series = $this->isDailyRange()
+            ? $seriesFactory->forMetricByDay($location, $weatherData, $this->metric())
+            : $seriesFactory->forMetric($location, $weatherData, $this->metric(), 24);
+        $this->series = app(UnitPreferences::class)->series($this->metric(), $series);
 
         if ($this->selectedPointId !== null) {
             $point = $this->point($this->selectedPointId);
@@ -414,22 +540,23 @@ class ChartExplorer extends NativeComponent
 
     private function metric(): WeatherMetric
     {
+        foreach (WeatherMetric::cases() as $metric) {
+            if ($this->metricChoice === $metric->label()) {
+                return $metric;
+            }
+        }
+
         return match ($this->metricChoice) {
-            'Humedad' => WeatherMetric::Humidity,
-            'Precipitación' => WeatherMetric::Precipitation,
-            'Viento' => WeatherMetric::WindSpeed,
+            'Humedad', 'Humidity' => WeatherMetric::Humidity,
+            'Lluvia', 'Rain', 'Precipitación', 'Precipitation' => WeatherMetric::Precipitation,
+            'Viento', 'Wind' => WeatherMetric::WindSpeed,
             default => WeatherMetric::Temperature,
         };
     }
 
     private function metricUnit(WeatherMetric $metric): string
     {
-        return match ($metric) {
-            WeatherMetric::Temperature => '°C',
-            WeatherMetric::Humidity => '%',
-            WeatherMetric::Precipitation => 'mm',
-            WeatherMetric::WindSpeed => 'km/h',
-        };
+        return app(UnitPreferences::class)->unit($metric);
     }
 
     private function location(): ?Location
@@ -459,7 +586,9 @@ class ChartExplorer extends NativeComponent
             $occurrences[$base] = ($occurrences[$base] ?? 0) + 1;
             $label = $baseCounts[$base] === 1
                 ? $base
-                : $base.' · '.($location->is_default ? 'Principal' : 'Punto '.$occurrences[$base]);
+                : $base.' · '.($location->is_default
+                    ? __('ui.locations.primary')
+                    : __('ui.locations.point', ['number' => $occurrences[$base]]));
             $choices[$label] = $location->id;
         }
 
@@ -469,5 +598,10 @@ class ChartExplorer extends NativeComponent
     private function locationLabel(Location $location): string
     {
         return array_search($location->id, $this->locationChoiceMap(), true) ?: $location->name;
+    }
+
+    private function isDailyRange(): bool
+    {
+        return in_array($this->rangeChoice, ['7 días', '7 days', __('ui.explorer.days_7')], true);
     }
 }
