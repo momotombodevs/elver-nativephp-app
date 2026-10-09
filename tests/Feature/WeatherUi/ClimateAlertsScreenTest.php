@@ -16,26 +16,34 @@ use Native\Mobile\Testing\Native;
 
 uses(LazilyRefreshDatabase::class);
 
-it('keeps alerts primary and creates one from a native bottom sheet', function () {
+it('keeps alerts as a secondary screen and creates one from its inline form', function () {
     $location = Location::factory()->default()->create(['name' => 'Invernadero']);
     WeatherSnapshot::factory()->create(['location_id' => $location->id]);
 
     Native::fakeBridge();
 
-    $screen = Native::visit('/alerts')
+    $parent = Native::visit('/alerts')
         ->assertSee('Tus alertas')
         ->assertSee('Sin alertas')
         ->assertDontSee('Avisos aunque cierres la app')
         ->assertDontSee('Activa notificaciones para recibir avisos.')
-        ->assertSee('Revisando permisos…')
+        ->assertElement('activity_indicator', fn (array $node): bool => ($node['ref'] ?? null) === 'alerts-notification-permission-indicator')
         ->assertNativeCalled('ClimateNotifications.CheckPermission')
         ->assertNativeNotCalled('ClimateNotifications.SyncSchedule')
         ->assertDontSee('Evaluar ahora')
         ->assertDontSee(substr($location->id, 0, 8))
-        ->assertSet('showCreateSheet', false)
+        ->assertElement('native_root_tabs', fn (array $node): bool => ($node['props']['nav_title'] ?? null) === 'Alertas'
+            && ($node['props']['nav_back'] ?? false) === true)
+        ->assertTabBarHidden()
+        ->assertSet('showCreateSheet', false);
+
+    $screen = $parent
         ->tap('create-alert-action')
+        ->followNavigation()
+        ->assertSet('fullScreenCreate', true)
         ->assertSet('showCreateSheet', true)
-        ->assertElement('bottom_sheet', fn (array $node): bool => ($node['ref'] ?? null) === 'create-alert-sheet')
+        ->assertElement('list', fn (array $node): bool => ($node['ref'] ?? null) === 'create-alert-form')
+        ->assertMissingElement('bottom_sheet')
         ->assertSee('Qué medir')
         ->assertSee('Avisar si')
         ->assertSee('Valor (°C)')
@@ -51,9 +59,10 @@ it('keeps alerts primary and creates one from a native bottom sheet', function (
             'duration' => 'short',
         ])
         ->assertNativeCalled('ClimateNotifications.RequestPermission')
-        ->assertSee('Revisando permisos…')
+        ->goBack()
+        ->assertElement('activity_indicator', fn (array $node): bool => ($node['ref'] ?? null) === 'alerts-notification-permission-indicator')
         ->assertSee('Lluvia')
-        ->assertSee('Tus alertas');
+        ->assertSee('Lluvia');
 
     $alert = ClimateAlert::query()->sole();
     expect($alert->threshold)->toBe('12.50')
@@ -68,7 +77,7 @@ it('refreshes notification access when the alerts screen opens and resumes', fun
 
     $screen = Native::visit('/alerts')
         ->assertNativeCalled('ClimateNotifications.CheckPermission')
-        ->assertSee('Revisando permisos…');
+        ->assertElement('activity_indicator', fn (array $node): bool => ($node['ref'] ?? null) === 'alerts-notification-permission-indicator');
     $firstRequestId = $screen->get('pendingNotificationAccessId');
 
     $screen->emitNative(ClimateNotificationPermissionResult::class, [
@@ -117,13 +126,30 @@ it('offers activation instructions when notification access is not granted', fun
         ->assertDontSee('Avisos aunque cierres la app');
 });
 
+it('does not leave notification permission checking forever', function () {
+    Location::factory()->default()->create(['name' => 'Mi ubicación']);
+
+    Native::fakeBridge();
+
+    $screen = Native::visit('/alerts')
+        ->assertElement('activity_indicator', fn (array $node): bool => ($node['ref'] ?? null) === 'alerts-notification-permission-indicator');
+
+    $screen->call('expireNotificationPermissionCheck')
+        ->call('expireNotificationPermissionCheck')
+        ->assertElement('activity_indicator', fn (array $node): bool => ($node['ref'] ?? null) === 'alerts-notification-permission-indicator')
+        ->call('expireNotificationPermissionCheck')
+        ->assertSet('notificationAccessState', 'error')
+        ->assertSee('No se pudo revisar el permiso de avisos.')
+        ->assertSee('Revisar permiso')
+        ->assertDontSee('Revisando permisos…');
+});
+
 it('fills alert type and comparison for quick choices without choosing a threshold', function () {
     Location::factory()->default()->create();
 
     Native::fakeBridge();
 
-    Native::visit('/alerts')
-        ->tap('create-alert-action')
+    Native::visit('/alerts/create')
         ->set('threshold', '12')
         ->tap('quick-alert-rain')
         ->assertSet('metricChoice', 'Lluvia')
@@ -234,7 +260,7 @@ it('evaluates stale alert data from cache while refreshing in the queue', functi
 
     Native::visit('/alerts')
         ->assertSee('Datos antiguos')
-        ->assertSee('Actualizando clima…')
+        ->assertElement('activity_indicator', fn (array $node): bool => ($node['ref'] ?? null) === 'alerts-forecast-refresh-indicator')
         ->assertSet('forecastRefreshLoading', true)
         ->assertAccessible();
 
@@ -252,11 +278,13 @@ it('queues the first weather review when creating an alert without cached data',
     Queue::fake([RefreshLocationForecast::class]);
     Native::fakeBridge();
 
-    Native::visit('/alerts')
+    $screen = Native::visit('/alerts')
         ->tap('create-alert-action')
+        ->followNavigation()
         ->set('threshold', '30')
         ->tap('create-alert')
-        ->assertSee('Actualizando clima…')
+        ->goBack()
+        ->assertElement('activity_indicator', fn (array $node): bool => ($node['ref'] ?? null) === 'alerts-forecast-refresh-indicator')
         ->assertSet('forecastRefreshLoading', true);
 
     Queue::assertPushed(RefreshLocationForecast::class, fn (RefreshLocationForecast $job): bool => $job->locationId === $location->id && $job->force === false

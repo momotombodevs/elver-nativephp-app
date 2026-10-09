@@ -35,11 +35,9 @@ it('keeps weather details out of the summary until a forecast is available', fun
     Queue::fake([RefreshLocationForecast::class]);
 
     Native::visit('/')
-        ->assertSee('Cargando clima…')
+        ->assertElement('activity_indicator', fn (array $node): bool => ($node['ref'] ?? null) === 'summary-loading-state-indicator')
         ->assertDontSee('Más datos')
         ->assertDontSee('Se siente como')
-        ->assertElement('top_bar_action', fn (array $node): bool => ($node['props']['id'] ?? null) === 'refresh-forecast'
-            && ($node['props']['label'] ?? null) === 'Actualizar')
         ->assertDontSee('PRINCIPAL')
         ->assertAccessible();
 
@@ -62,8 +60,10 @@ it('renders cached current conditions and a native chart', function () {
         ->assertSee('Se siente como')
         ->assertSee('Próximas 24 horas')
         ->assertSee('Actualizado')
+        ->assertMissingElement('column', fn (array $node): bool => ($node['ref'] ?? null) === 'summary-recommendations')
         ->assertDontSee('PRINCIPAL')
-        ->assertElement('top_bar_action', fn (array $node): bool => ($node['props']['id'] ?? null) === 'refresh-forecast')
+        ->assertElement('top_bar_action', fn (array $node): bool => ($node['props']['id'] ?? null) === 'open-settings'
+            && ($node['props']['label'] ?? null) === 'Ajustes')
         ->assertElement('column', fn (array $node): bool => ($node['ref'] ?? null) === 'summary-weather-details')
         ->assertElement('line_chart', fn (array $node): bool => ($node['ref'] ?? null) === 'summary-temperature-chart'
             && ($node['props']['a11y_label'] ?? null) === 'Temperatura prevista para las próximas 24 horas en Finca El Sol')
@@ -87,7 +87,7 @@ it('changes the summary location without changing the primary location', functio
     expect($first->fresh()->is_default)->toBeTrue();
 });
 
-it('refreshes weather from the top bar action', function () {
+it('refreshes weather manually', function () {
     AppSetting::query()->create(['key' => 'onboarding_seen', 'value' => '1']);
     $location = Location::factory()->default()->create();
     WeatherSnapshot::factory()->create(['location_id' => $location->id]);
@@ -99,7 +99,7 @@ it('refreshes weather from the top bar action', function () {
     Queue::fake([RefreshLocationForecast::class]);
 
     Native::visit('/')
-        ->tap('Actualizar')
+        ->call('refreshForecast')
         ->assertSet('loading', true);
 
     Queue::assertPushed(RefreshLocationForecast::class, fn (RefreshLocationForecast $job): bool => $job->locationId === $location->id && $job->force === true
@@ -119,7 +119,7 @@ it('renders cached conditions while refreshing stale weather in the queue', func
 
     Native::visit('/')
         ->assertSee('Sin conexión')
-        ->assertSee('Actualizando…')
+        ->assertElement('activity_indicator', fn (array $node): bool => ($node['ref'] ?? null) === 'summary-loading-indicator')
         ->assertSet('loading', true)
         ->assertAccessible();
 

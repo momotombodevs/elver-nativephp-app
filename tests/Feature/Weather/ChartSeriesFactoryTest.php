@@ -74,12 +74,12 @@ it('rejects weekly chart ranges longer than seven days', function () {
     (new ChartSeriesFactory)->forMetricByDay($location, chartSeriesWeatherData(), WeatherMetric::Temperature, 8);
 })->throws(InvalidArgumentException::class, 'between 1 and 7 days');
 
-it('uses the semantic accent color for rain charts', function () {
-    expect(WeatherMetric::Temperature->color())->toBe('#7F00FF')
-        ->and(WeatherMetric::Humidity->color())->toBe('#B86BFF')
-        ->and(WeatherMetric::Precipitation->color())->toBe(theme('accent'))
+it('uses the semantic accent foreground color for rain charts', function () {
+    expect(WeatherMetric::Temperature->color())->toBe(theme('primary'))
+        ->and(WeatherMetric::Humidity->color())->toBe('#9B72D8')
+        ->and(WeatherMetric::Precipitation->color())->toBe(theme('accent-foreground'))
         ->and(WeatherMetric::Precipitation->label())->toBe('Lluvia')
-        ->and(WeatherMetric::WindSpeed->color())->toBe('#4B008F')
+        ->and(WeatherMetric::WindSpeed->color())->toBe('#55308A')
         ->and([
             WeatherMetric::Temperature->color(),
             WeatherMetric::Humidity->color(),
@@ -92,14 +92,18 @@ it('exposes the branded native ui tokens in both appearances', function () {
     $theme = config('native-ui.theme');
 
     expect($theme['light'])->toMatchArray([
-        'primary' => '#7F00FF',
-        'accent' => '#006A70',
-        'on-accent' => '#FFFFFF',
-        'background' => '#F8F5FF',
+        'primary' => '#5B3A91',
+        'accent' => '#E8DFF0',
+        'on-accent' => '#382D43',
+        'accent-foreground' => '#5B3A91',
+        'background' => '#F5F3F7',
+        'outline-variant' => '#E4DFE8',
     ])->and($theme['dark'])->toMatchArray([
-        'primary' => '#7F00FF',
-        'accent' => '#75DBD4',
-        'on-accent' => '#0B3433',
-        'background' => '#0F0719',
+        'primary' => '#B99DDD',
+        'accent' => '#4B3B59',
+        'on-accent' => '#F7EEFF',
+        'accent-foreground' => '#DCC6F1',
+        'background' => '#110D15',
+        'outline-variant' => '#463B4E',
     ]);
 });

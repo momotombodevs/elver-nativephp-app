@@ -3,13 +3,23 @@
 use App\Domain\Weather\Contracts\WeatherProvider;
 use App\Models\Location;
 use Illuminate\Foundation\Testing\LazilyRefreshDatabase;
-use Illuminate\Http\Client\Request;
-use Illuminate\Support\Facades\Http;
 use Native\Mobile\Events\Alert\ButtonPressed;
 use Native\Mobile\Events\Geolocation\LocationReceived;
 use Native\Mobile\Testing\Native;
 
 uses(LazilyRefreshDatabase::class);
+
+it('explains that locations are captured from the device GPS', function () {
+    Native::fakeBridge();
+
+    Native::visit('/locations/add')
+        ->assertSee('Ej. Casa, trabajo o finca')
+        ->assertSee('Nombre del lugar')
+        ->assertSee('Ubicación de este dispositivo')
+        ->assertSee('Usaremos el GPS para guardar el punto y consultar su clima.')
+        ->assertDontSee('Buscar ciudad o lugar')
+        ->assertDontSee('Busca una ciudad o lugar');
+});
 
 it('keeps a nearby GPS result from creating a duplicate location', function () {
     $existing = Location::factory()->default()->create([
@@ -51,79 +61,6 @@ it('keeps a nearby GPS result from creating a duplicate location', function () {
 
     expect(Location::query()->count())->toBe(1)
         ->and(Location::query()->sole()->is($existing))->toBeTrue();
-});
-
-it('saves a searched community with the farm name, coordinates, and timezone', function () {
-    Http::preventStrayRequests();
-    Http::fake([
-        'geocoding-api.open-meteo.com/v1/search*' => Http::response([
-            'results' => [[
-                'id' => 12345,
-                'name' => 'Masaya',
-                'admin1' => 'Masaya',
-                'admin2' => 'Masaya',
-                'country' => 'Nicaragua',
-                'latitude' => 11.974,
-                'longitude' => -86.094,
-                'timezone' => 'America/Managua',
-            ]],
-        ]),
-    ]);
-
-    Native::fakeBridge();
-
-    Native::visit('/locations')
-        ->tap('locations-add-first')
-        ->set('name', 'Finca San José')
-        ->set('communityQuery', 'Masaya')
-        ->assertSee('Masaya · Nicaragua')
-        ->tap('community-12345')
-        ->assertSet('showAddLocation', false)
-        ->assertNativeCalled('Dialog.Toast', fn (array $params): bool => $params['message'] === 'Finca San José se guardó.');
-
-    $location = Location::query()->sole();
-    expect($location->name)->toBe('Finca San José')
-        ->and((float) $location->latitude)->toBe(11.974)
-        ->and((float) $location->longitude)->toBe(-86.094)
-        ->and($location->timezone)->toBe('America/Managua')
-        ->and($location->is_default)->toBeTrue();
-
-    Http::assertSent(fn (Request $request): bool => str_contains($request->url(), 'name=Masaya')
-        && str_contains($request->url(), 'language=es')
-        && str_contains($request->url(), 'count=5'));
-});
-
-it('shows a friendly empty result for a community search with no matches', function () {
-    Http::preventStrayRequests();
-    Http::fake([
-        'geocoding-api.open-meteo.com/v1/search*' => Http::response([]),
-    ]);
-
-    Native::fakeBridge();
-
-    Native::visit('/locations')
-        ->tap('locations-add-first')
-        ->set('communityQuery', 'No existe')
-        ->assertSee('No encontramos comunidades con ese nombre.');
-
-    expect(Location::query()->count())->toBe(0);
-});
-
-it('shows a connection error when community search cannot reach Open-Meteo', function () {
-    Http::preventStrayRequests();
-    Http::fake([
-        'geocoding-api.open-meteo.com/v1/search*' => Http::failedConnection(),
-    ]);
-
-    Native::fakeBridge();
-
-    Native::visit('/locations')
-        ->tap('locations-add-first')
-        ->set('communityQuery', 'Masaya')
-        ->assertSee('No se pudo buscar. Revisa tu conexión.')
-        ->assertDontSee('No encontramos comunidades con ese nombre.');
-
-    expect(Location::query()->count())->toBe(0);
 });
 
 it('can update an existing nearby location instead of creating a duplicate', function () {
@@ -172,12 +109,12 @@ it('can update an existing nearby location instead of creating a duplicate', fun
     $provider->shouldNotHaveReceived('fetch');
 });
 
-it('uses a localized structured swipe action and a compact add sheet', function () {
+it('uses a localized structured swipe action and a full-screen native add flow', function () {
     $location = Location::factory()->default()->create();
 
     Native::fakeBridge();
 
-    Native::visit('/locations')
+    $screen = Native::visit('/locations')
         ->assertElement('list_item', function (array $node) use ($location): bool {
             if (($node['ref'] ?? null) !== 'location-'.$location->id) {
                 return false;
@@ -191,10 +128,12 @@ it('uses a localized structured swipe action and a compact add sheet', function 
                 && $actions[0]['icon'] === 'delete'
                 && ! array_key_exists('on_swipe_delete', $node['props']);
         })
-        ->assertSet('locationListVersion', 0)
-        ->tap('add-location-fab')
-        ->assertSet('locationListVersion', 1)
-        ->assertElement('bottom_sheet', fn (array $node): bool => ($node['props']['detents'] ?? null) === '0.4,large')
+        ->assertSet('locationListVersion', 0);
+
+    $screen->tap('add-location-fab')
+        ->followNavigation()
+        ->assertSet('fullScreenAddLocation', true)
+        ->assertElement('list', fn (array $node): bool => ($node['ref'] ?? null) === 'add-location-screen')
         ->assertDontSee('Cancelar')
         ->assertAccessible();
 });

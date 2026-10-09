@@ -10,7 +10,7 @@ uses(TestCase::class);
 uses(LazilyRefreshDatabase::class);
 
 it('converts displayed values while keeping persisted weather values in metric units', function () {
-    AppSetting::query()->create(['key' => 'weather_units', 'value' => 'imperial']);
+    AppSetting::query()->updateOrCreate(['key' => 'weather_units'], ['value' => 'imperial']);
     $preferences = app(UnitPreferences::class);
 
     expect($preferences->unit(WeatherMetric::Temperature))->toBe('°F')

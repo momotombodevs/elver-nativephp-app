@@ -18,17 +18,24 @@ use Native\Mobile\Testing\Native;
 
 uses(LazilyRefreshDatabase::class);
 
-it('registers all five v1 screens with shared native navigation', function () {
+it('registers all v1 screens with shared three-item native navigation', function () {
     AppSetting::query()->create(['key' => 'onboarding_seen', 'value' => '1']);
-    foreach (['/' => 'Consulta el clima de tu zona.', '/explorer' => 'Sin datos', '/locations' => 'Guarda un lugar para ver su clima.', '/alerts' => 'Después podrás crear alertas.', '/settings' => 'Fuente meteorológica: Open-Meteo'] as $uri => $copy) {
-        Native::visit($uri)
+    foreach (['/' => 'Consulta el clima de tu zona.', '/explorer' => 'Sin datos', '/locations' => 'Guarda un lugar para ver su clima.', '/alerts' => 'Después podrás crear alertas.', '/settings' => 'Tema: Sistema'] as $uri => $copy) {
+        $screen = Native::visit($uri)
             ->assertSee($copy)
             ->assertSee('Resumen')
             ->assertSee('Gráficas')
-            ->assertSee('Ubicaciones')
-            ->assertSee('Alertas')
-            ->assertSee('Ajustes')
-            ->assertTabBarVisible();
+            ->assertSee('Ubicaciones');
+
+        if (in_array($uri, ['/settings', '/alerts'], true)) {
+            $screen->assertTabBarHidden();
+        } else {
+            $screen->assertTabBarVisible()
+                ->assertHasTab('Resumen')
+                ->assertHasTab('Gráficas')
+                ->assertHasTab('Ubicaciones')
+                ->assertMissingElement('bottom_nav_item', fn (array $node): bool => ($node['props']['label'] ?? null) === 'Alertas');
+        }
     }
 });
 
@@ -73,7 +80,7 @@ it('renders hourly and daily chart points for their selected ranges', function (
         ->and($screen->get('selectedPointId'))->toBeNull();
 });
 
-it('refreshes the chart from the native app bar action', function () {
+it('refreshes the chart manually', function () {
     $location = Location::factory()->default()->create(['name' => 'Parcela Central']);
     WeatherSnapshot::factory()->create(['location_id' => $location->id]);
 
@@ -84,9 +91,7 @@ it('refreshes the chart from the native app bar action', function () {
     Queue::fake([RefreshLocationForecast::class]);
 
     Native::visit('/explorer')
-        ->assertElement('top_bar_action', fn (array $node): bool => ($node['props']['id'] ?? null) === 'refresh-series'
-            && ($node['props']['label'] ?? null) === 'Actualizar')
-        ->tap('Actualizar')
+        ->call('refreshSeries')
         ->assertSet('loading', true);
 
     Queue::assertPushed(RefreshLocationForecast::class, fn (RefreshLocationForecast $job): bool => $job->locationId === $location->id && $job->force === true
@@ -108,7 +113,7 @@ it('renders cached chart data while refreshing stale weather in the queue', func
 
     Native::visit('/explorer')
         ->assertSee('Sin conexión')
-        ->assertSee('Actualizando datos…')
+        ->assertElement('activity_indicator', fn (array $node): bool => ($node['ref'] ?? null) === 'explorer-loading-indicator')
         ->assertSet('loading', true)
         ->assertAccessible();
 
@@ -176,10 +181,9 @@ it('saves a GPS result locally and makes the first location principal', function
         ->respondTo('Geolocation.RequestPermissions', [])
         ->respondTo('Geolocation.GetCurrentPosition', []);
 
-    $screen = Native::visit('/locations')
-        ->assertSet('showAddLocation', false)
+    $screen = Native::visit('/locations/add')
         ->assertAccessible()
-        ->tap('locations-add-first')
+        ->assertSet('fullScreenAddLocation', true)
         ->assertSet('showAddLocation', true)
         ->assertSee('Agregar ubicación')
         ->assertDontSee('Cancelar')
@@ -230,8 +234,7 @@ it('opens app settings after location permission is permanently denied', functio
         ->respondTo('Geolocation.RequestPermissions', [])
         ->respondTo('System.OpenAppSettings', []);
 
-    $screen = Native::visit('/locations')
-        ->tap('locations-add-first')
+    $screen = Native::visit('/locations/add')
         ->tap('use-current-location');
 
     $permissionRequestId = $screen->get('pendingPermissionRequestId');
@@ -296,9 +299,11 @@ it('creates and pauses a local climate threshold', function () {
 
     $screen = Native::visit('/alerts')
         ->tap('create-alert-action')
+        ->followNavigation()
         ->set('threshold', '30,5')
         ->tap('create-alert')
         ->assertNativeCalled('Dialog.Toast', fn (array $params): bool => $params['message'] === 'Alerta guardada.')
+        ->goBack()
         ->assertSee('Temperatura')
         ->assertSee('más de 30,5 °C');
 
@@ -314,8 +319,7 @@ it('creates and pauses a local climate threshold', function () {
 it('keeps an empty climate alert open and does not save it', function () {
     Location::factory()->default()->create();
 
-    $screen = Native::visit('/alerts')
-        ->tap('create-alert-action')
+    $screen = Native::visit('/alerts/create')
         ->tap('create-alert')
         ->assertSet('showCreateSheet', true)
         ->assertSee('Escribe un número válido.');
