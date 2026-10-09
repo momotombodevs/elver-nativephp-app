@@ -77,6 +77,7 @@ final class BackgroundAlertSchedule
 
         return [
             'id' => $alert->id,
+            'locationId' => (string) $location->getKey(),
             'metric' => $alert->metric->value,
             'label' => $alert->metric->label(),
             'operator' => $alert->operator->value,

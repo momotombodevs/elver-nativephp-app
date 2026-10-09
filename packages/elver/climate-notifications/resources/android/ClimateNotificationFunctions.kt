@@ -303,6 +303,14 @@ private object ClimateAlertSchedule {
         val previous = runCatching { JSONObject(previousJson ?: "{}") }.getOrDefault(JSONObject())
         val next = JSONObject()
 
+        val previousKeys = previous.keys()
+        while (previousKeys.hasNext()) {
+            val key = previousKeys.next()
+            if (key.startsWith("recommendation:")) {
+                next.put(key, previous.optJSONObject(key))
+            }
+        }
+
         for (index in 0 until alerts.length()) {
             val alert = alerts.optJSONObject(index) ?: continue
             val id = alert.optString("id")
@@ -376,6 +384,7 @@ class ClimateAlertWorker(
         val states = ClimateAlertSchedule.alertStates(applicationContext)
         val recommendationRules = schedule.optJSONArray("recommendationRules") ?: JSONArray()
         var hadRequestFailure = false
+        var recommendationNotificationSent = false
 
         for (index in 0 until locations.length()) {
             if (isStopped) {
@@ -422,6 +431,7 @@ class ClimateAlertWorker(
                     && ClimateAlertSchedule.isActive(applicationContext, id, signature)) {
                     showNotification(
                         context = applicationContext,
+                        locationId = location.optString("id"),
                         locationName = location.optString("name"),
                         alert = alert,
                         channelId = CRITICAL_CHANNEL_ID,
@@ -442,13 +452,14 @@ class ClimateAlertWorker(
 
             if (preferences.optBoolean("recommendations", true)
                 || preferences.optBoolean("rapidChanges", true)) {
-                evaluateRecommendations(
+                recommendationNotificationSent = evaluateRecommendations(
                     forecast = forecast,
                     location = location,
                     rules = recommendationRules,
                     states = states,
                     allowRecommendations = preferences.optBoolean("recommendations", true),
                     allowRapidChanges = preferences.optBoolean("rapidChanges", true),
+                    notificationAlreadySent = recommendationNotificationSent,
                 )
             }
         }
@@ -507,11 +518,13 @@ class ClimateAlertWorker(
         states: JSONObject,
         allowRecommendations: Boolean,
         allowRapidChanges: Boolean,
-    ) {
+        notificationAlreadySent: Boolean,
+    ): Boolean {
         val current = currentValues(forecast)
         val hourly = forecast.optJSONObject("hourly")
         val locationId = location.optString("id")
         val locationName = location.optString("name")
+        var candidate: JSONObject? = null
 
         for (index in 0 until rules.length()) {
             val rule = rules.optJSONObject(index) ?: continue
@@ -530,16 +543,9 @@ class ClimateAlertWorker(
                 ?.optString("state")
                 .takeUnless { it == "null" }
 
-            if (active && previousState != "active") {
-                showNotification(
-                    context = applicationContext,
-                    locationName = locationName,
-                    alert = rule,
-                    channelId = RECOMMENDATION_CHANNEL_ID,
-                    title = rule.optString("title"),
-                    message = rule.optString("message").replace("{location}", locationName),
-                    notificationId = stateKey.hashCode(),
-                )
+            if (active && previousState != "active" && (candidate == null ||
+                    priorityRank(rule.optString("priority")) > priorityRank(candidate?.optString("priority").orEmpty()))) {
+                candidate = rule
             }
 
             states.put(
@@ -550,6 +556,33 @@ class ClimateAlertWorker(
                     .put("evaluatedAt", System.currentTimeMillis()),
             )
         }
+
+        if (notificationAlreadySent || candidate == null) {
+            return notificationAlreadySent
+        }
+
+        val rule = candidate ?: return notificationAlreadySent
+        val code = rule.optString("code")
+        val stateKey = "recommendation:$locationId:$code"
+        showNotification(
+            context = applicationContext,
+            locationId = locationId,
+            locationName = locationName,
+            alert = rule,
+            channelId = RECOMMENDATION_CHANNEL_ID,
+            title = rule.optString("title"),
+            message = rule.optString("message").replace("{location}", locationName),
+            notificationId = stateKey.hashCode(),
+        )
+
+        return true
+    }
+
+    private fun priorityRank(priority: String): Int = when (priority) {
+        "critical" -> 3
+        "action" -> 2
+        "info" -> 1
+        else -> 0
     }
 
     private fun recommendationActive(
@@ -613,6 +646,7 @@ class ClimateAlertWorker(
 
     private fun showNotification(
         context: Context,
+        locationId: String,
         locationName: String,
         alert: JSONObject,
         channelId: String,
@@ -626,8 +660,8 @@ class ClimateAlertWorker(
 
         val locationIntent = context.packageManager.getLaunchIntentForPackage(context.packageName)
             ?.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
-            ?.takeIf { alert.optString("id").isNotBlank() }
-            ?.putExtra("notification_url", notificationRoute(alert))
+            ?.takeIf { locationId.isNotBlank() && alert.optString("id").isNotBlank() }
+            ?.putExtra("notification_url", notificationRoute(locationId, alert))
         val contentIntent = locationIntent?.let {
             PendingIntent.getActivity(
                 context,
@@ -664,8 +698,8 @@ class ClimateAlertWorker(
         return candidate.takeIf { uri.scheme == "https" && !uri.host.isNullOrBlank() }
     }
 
-    private fun notificationRoute(alert: JSONObject): String =
-        "/alerts/location/${alert.optString("locationId")}/alert/${alert.optString("id")}"
+    private fun notificationRoute(locationId: String, alert: JSONObject): String =
+        "/alerts/location/$locationId/alert/${alert.optString("id")}"
 
     companion object {
         private val METRICS = listOf(
