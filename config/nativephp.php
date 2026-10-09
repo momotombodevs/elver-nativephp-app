@@ -41,6 +41,8 @@ return [
 
     'app_id' => env('NATIVEPHP_APP_ID'),
 
+    'supported_locales' => ['es-NI', 'en'],
+
     /*
     |--------------------------------------------------------------------------
     | Deeplink Scheme
@@ -136,6 +138,12 @@ return [
     */
 
     'permission_localizations' => [
+        'es-NI' => [
+            'NSLocationWhenInUseUsageDescription' => 'Elver usa tu ubicación al guardar un lugar y mostrar su clima.',
+        ],
+        'en' => [
+            'NSLocationWhenInUseUsageDescription' => 'Elver uses your location to save a place and show its weather.',
+        ],
         // 'nl' => [
         //     'NSCameraUsageDescription' => 'Gebruikt om een profielfoto te maken.',
         //     'NSMicrophoneUsageDescription' => 'Gebruikt om audio op te nemen bij je video\'s.',

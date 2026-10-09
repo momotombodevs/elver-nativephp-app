@@ -12,10 +12,10 @@ enum WeatherMetric: string
     public function label(): string
     {
         return match ($this) {
-            self::Temperature => 'Temperatura',
-            self::Humidity => 'Humedad relativa',
-            self::Precipitation => 'Lluvia',
-            self::WindSpeed => 'Velocidad del viento',
+            self::Temperature => __('weather.metrics.temperature'),
+            self::Humidity => __('weather.metrics.humidity'),
+            self::Precipitation => __('weather.metrics.precipitation'),
+            self::WindSpeed => __('weather.metrics.wind'),
         };
     }
 
@@ -32,10 +32,17 @@ enum WeatherMetric: string
     public function color(): string
     {
         return match ($this) {
-            self::Temperature => '#7F00FF',
-            self::Humidity => '#B86BFF',
-            self::Precipitation => theme('accent'),
-            self::WindSpeed => '#4B008F',
+            self::Temperature => theme('primary'),
+            self::Humidity => '#9B72D8',
+            self::Precipitation => $this->accentColor(),
+            self::WindSpeed => '#55308A',
         };
+    }
+
+    private function accentColor(): string
+    {
+        $color = theme('accent-foreground', '#6D28D9');
+
+        return is_string($color) && $color !== '' ? $color : '#6D28D9';
     }
 }

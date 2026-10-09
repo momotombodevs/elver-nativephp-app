@@ -10,8 +10,8 @@ enum ThresholdOperator: string
     public function label(): string
     {
         return match ($this) {
-            self::Above => 'Por encima de',
-            self::Below => 'Por debajo de',
+            self::Above => __('weather.alerts.operator_above'),
+            self::Below => __('weather.alerts.operator_below'),
         };
     }
 }

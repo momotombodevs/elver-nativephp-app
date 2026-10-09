@@ -12,10 +12,10 @@ enum AlertState: string
     public function label(): string
     {
         return match ($this) {
-            self::Normal => 'Normal',
-            self::Exceeded => 'Umbral superado',
-            self::NoData => 'Sin datos',
-            self::Stale => 'Datos desactualizados',
+            self::Normal => __('ui.alerts.state_normal'),
+            self::Exceeded => __('ui.alerts.state_exceeded'),
+            self::NoData => __('ui.alerts.state_no_data'),
+            self::Stale => __('ui.alerts.state_stale'),
         };
     }
 }
